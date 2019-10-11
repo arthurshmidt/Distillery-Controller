@@ -7,11 +7,15 @@ from widgetlords.pi_spi_din import *
 init()
 outputs = Mod4AO()
 
-while True:
-    print("Commanding Valve to 4ma")
-    outputs.write_single(0,800)     # 800 = 4ma
-    sleep(2)
+def percent_to_da(valve_percent):
+    da_signal = ((4000-800)/(100-0)) * valve_percent + 800
+    return da_signal
 
-    print("Commanding Valve to 20ma")
-    outputs.write_single(0,4000)    # 4000 = 20ma
-    sleep(2)
+# Main program loop
+while True:
+    valve_percent = int(input("Enter valve position in %: "))
+    da_signal = percent_to_da(valve_percent)
+
+    print("You entered {}% = {}da".format(valve_percent,da_signal))
+    outputs.write_single(0,da_signal)     # 800 = 4ma ; 4000 = 20ma
+#    sleep(2)
