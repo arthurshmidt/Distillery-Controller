@@ -18,4 +18,6 @@ while True:
 
     print("You entered {}% = {}da".format(valve_percent,da_signal))
     outputs.write_single(0,da_signal)     # 800 = 4ma ; 4000 = 20ma
+    
+    _ = input("Press Enter to Continue.")
 #    sleep(2)
