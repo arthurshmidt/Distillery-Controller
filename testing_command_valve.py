@@ -1,11 +1,11 @@
 # Testing file fof the PI-SPI-DIN-AO Analog Output Module that communicates to
 # Raspberry Pi via the SPI bus.
 from time import sleep
-from widgetlords.pi_spi_din import *
+from widgetlords.pi_spi import *
 # from widgetlords import *
 
 init()
-outputs = Mod4AO()
+outputs = Mod2AO()
 
 def percent_to_da(valve_percent):
     da_signal = ((4000-800)/(100-0)) * valve_percent + 800
