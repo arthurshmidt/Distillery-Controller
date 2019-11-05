@@ -13,11 +13,12 @@ def percent_to_da(valve_percent):
 
 # Main program loop
 while True:
+    pin_out = int(input("Enter pin-out (0-3): "))
     valve_percent = int(input("Enter valve position in %: "))
-    da_signal = percent_to_da(valve_percent)
+    da_signal = int(percent_to_da(valve_percent))
 
-    print("You entered {}% = {}da".format(valve_percent,da_signal))
-    outputs.write_single(0,da_signal)     # 800 = 4ma ; 4000 = 20ma
+    print("You entered {}% on pin-out {} = {}da".format(valve_percent,pin_out,da_signal))
+    outputs.write_single(pin_out,da_signal)     # 800 = 4ma ; 4000 = 20ma
     
     _ = input("Press Enter to Continue.")
 #    sleep(2)
