@@ -9,18 +9,19 @@ from simple_pid import PID              # PID control library for actuation
 
 init()                                  # required for controller
 thermister_inputs = Mod8AI(ChipEnable.CE0)  # AI board designation
-valve_outputs = Mod4AO()                    # AO board designation
+valve_outputs = Mod2AO()                    # AO board designation
 
 # Global variables
 dephlegmator_temp_st = 150              # setup dephlegmator to  150F
 condensor_temp_st = 150                # set condensor to 150F
+therm_calibration_factor = 3.0          # Calibration for thermisters (Celcius)
 
 # Board addresses for controllers
 dephlegmator_vlv_output = 0
 condensor_vlv_output = 1
 dephlegmator_therm_return_input = 0
-dephlegmator_therm_supply_input = 1
-condensor_therm_return_input = 2
+dephlegmator_therm_supply_input = 2
+condensor_therm_return_input = 1
 condensor_therm_supply_input = 3
 
 # PID value setting for tunning control
@@ -55,10 +56,10 @@ def read_temperatures():
     condensor_temp_return_da = thermister_inputs.read_single(condensor_therm_return_input)
 
     # convert temperatures using Steinhard equation to get Celcious
-    dephlegmator_temp_supply_c = steinhart_hart(10000,3380,4095,dephlegmator_temp_supply_da)
-    dephlegmator_temp_return_c = steinhart_hart(10000,3380,4095,dephlegmator_temp_return_da)
-    condensor_temp_supply_c = steinhart_hart(10000,3380,4095,condensor_temp_supply_da)
-    condensor_temp_return_c = steinhart_hart(10000,3380,4095,condensor_temp_return_da)
+    dephlegmator_temp_supply_c = steinhart_hart(10000,3380,4095,dephlegmator_temp_supply_da) - therm_calibration_factor
+    dephlegmator_temp_return_c = steinhart_hart(10000,3380,4095,dephlegmator_temp_return_da) - therm_calibration_factor
+    condensor_temp_supply_c = steinhart_hart(10000,3380,4095,condensor_temp_supply_da) - therm_calibration_factor
+    condensor_temp_return_c = steinhart_hart(10000,3380,4095,condensor_temp_return_da) - therm_calibration_factor
 
     # convert temperatures from Celcius to Fahrenheit
     dephlegmator_temp_supply_f = celcius_to_fahrnheit(dephlegmator_temp_supply_c)
@@ -81,6 +82,39 @@ def command_valves(dephlegmator_vlv_percent_cmd,condensor_vlv_percent_cmd):
     condensor_vlv_da_cmd = percent_to_da(condensor_vlv_percent_cmd)
     valve_outputs.write_single(condensor_vlv_output,condensor_vlv_da_cmd)
 
+# function: testing thermocouple reading
+# input: (tuple) temperatures, from the read_temperatures()
+# output: Display temperaure readings
+def test_temperature(temperatures_f):
+    print("Deph Supply: {0:.2f}F".format(temperatures_f[0]))
+    print("Deph Return: {0:.2f}F".format(temperatures_f[1]))
+    print("Cond Supply: {0:.2f}F".format(temperatures_f[2]))
+    print("Cond Return: {0:.2f}F".format(temperatures_f[3]))
+
+# function: testing valve commands
+# input: none
+# output: Display valve command.  Signal output to valves.
+def test_valves():
+    valve_outputs.write_single(0,800)
+    valve_outputs.write_single(1,800)
+    _ = input("Entered a DA of 800 on Pin-out 0,1")
+    valve_outputs.write_single(0,4000)
+    valve_outputs.write_single(1,4000)
+    _ = input("entered a DA of 4000 on Pin-out 0,1")
+
+# function: testing valve commands individually
+# input: none
+# output: Display valve command.  Signal output to valves.
+def test_valves_individual():
+    pin_out = int(input("Enter pin-out (0-3): "))
+    valve_percent = int(input("Enter valve position in %: "))
+    da_signal = int(percent_to_da(valve_percent))
+
+    print("You entered {}% on pin-out {} = {}da".format(valve_percent,pin_out,da_signal))
+    valve_outputs.write_single(pin_out,da_signal)     # 800 = 4ma ; 4000 = 20ma
+
+    _ = input("Press Enter to Continue.")
+
 # ************************************************************************* #
 #                                                                           #
 #                                   Main Code                               #
@@ -99,25 +133,21 @@ condensor_pid.output_limits = (0, 100)
 
 # Main loop
 while True:
+    # Basic Testing Functions - Uncomment to activate
+    # test_temperature(read_temperatures())
+    # test_valves()
+    # test_valves_individual()
+
     # read temperatures and create readalable variables
-    temperatures_f = read_temperatures()
-    dephlegmator_temp_supply_f = temperatures_f[0]
-    dephlegmator_temp_return_f = temperatures_f[1]
-    condensor_temp_supply_f = temperatures_f[2]
-    condensor_temp_return_f = temperatures_f[3]
+    # temperatures_f = read_temperatures()
+    # dephlegmator_temp_supply_f = temperatures_f[0]
+    # dephlegmator_temp_return_f = temperatures_f[1]
+    # condensor_temp_supply_f = temperatures_f[2]
+    # condensor_temp_return_f = temperatures_f[3]
 
-    # PID control
-    dephlegmator_valve_percent_cmd = dephlegmator_pid(dephlegmator_temp_return_f)
-    condensor_valve_percent_cmd = condensor_pid(condensor_temp_return_f)
-
-    # Command valves
-    command_valves(dephlegmator_vlv_percent_cmd,condensor_vlv_percent_cmd)
-
-    # Print outputs for trouble shooting
-    print("d_vlv({}) d_r_st({}) d_r_t({})".format(
-          dephlegmator_vlv_percent_cmd, dephlegmator_temp_st, dephlegmator_temp_return_f))
-    print("c_vlv({}) c_r_st({}) c_r_t({})".format(
-          condensor_vlv_percent_cmd, condensor_temp_st, condensor_temp_return_f))
+    # PID control - Uncomment to activate PID
+    # dephlegmator_valve_percent_cmd = dephlegmator_pid(dephlegmator_temp_return_f)
+    # condensor_valve_percent_cmd = condensor_pid(condensor_temp_return_f)
 
     # Insert a delay
-    sleep(.5)
+    sleep(2)
