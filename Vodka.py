@@ -3,13 +3,13 @@
 # based on discharge temperture from the deflagmator and condensing column
 from time import sleep
 from widgetlords.pi_spi_din import *    # for AI module
-from widgetlords.pi_spi import *        # for AO module
+# from widgetlords.pi_spi import *        # for AO module
 from widgetlords import *               # for AI module
 from simple_pid import PID              # PID control library for actuation
 
 init()                                  # required for controller
 thermister_inputs = Mod8AI(ChipEnable.CE0)  # AI board designation
-valve_outputs = Mod2AO()                    # AO board designation
+valve_outputs = Mod4AO()                    # AO board designation
 
 # Global variables
 dephlegmator_temp_st = 150              # setup dephlegmator to  150F
@@ -67,8 +67,7 @@ def read_temperatures():
     condensor_temp_supply_f = celcius_to_fahrnheit(condensor_temp_supply_c)
     condensor_temp_return_f = celcius_to_fahrnheit(condensor_temp_return_c)
 
-    return dephlegmator_temp_supply_f, dephlegmator_temp_return_f,
-           condensor_temp_supply_f, condensor_temp_return_f
+    return dephlegmator_temp_supply_f, dephlegmator_temp_return_f,condensor_temp_supply_f, condensor_temp_return_f
 
 # function: command valves to the desired valve position
 # input: dephlegmator valve command in %, condensor valve command in %
@@ -94,13 +93,13 @@ def test_temperature(temperatures_f):
 # function: testing valve commands
 # input: none
 # output: Display valve command.  Signal output to valves.
-def test_valves():
+def Etest_valves():
     valve_outputs.write_single(0,800)
     valve_outputs.write_single(1,800)
     _ = input("Entered a DA of 800 on Pin-out 0,1")
     valve_outputs.write_single(0,4000)
     valve_outputs.write_single(1,4000)
-    _ = input("entered a DA of 4000 on Pin-out 0,1")
+    _ = input("Entered a DA of 4000 on Pin-out 0,1")
 
 # function: testing valve commands individually
 # input: none
@@ -136,7 +135,7 @@ while True:
     # Basic Testing Functions - Uncomment to activate
     # test_temperature(read_temperatures())
     # test_valves()
-    # test_valves_individual()
+    test_valves_individual()
 
     # read temperatures and create readalable variables
     # temperatures_f = read_temperatures()
