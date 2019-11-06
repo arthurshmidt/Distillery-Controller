@@ -93,7 +93,7 @@ def test_temperature(temperatures_f):
 # function: testing valve commands
 # input: none
 # output: Display valve command.  Signal output to valves.
-def Etest_valves():
+def test_valves():
     valve_outputs.write_single(0,800)
     valve_outputs.write_single(1,800)
     _ = input("Entered a DA of 800 on Pin-out 0,1")
@@ -135,7 +135,7 @@ while True:
     # Basic Testing Functions - Uncomment to activate
     # test_temperature(read_temperatures())
     # test_valves()
-    test_valves_individual()
+    # test_valves_individual()
 
     # read temperatures and create readalable variables
     # temperatures_f = read_temperatures()
