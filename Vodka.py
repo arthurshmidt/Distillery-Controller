@@ -6,6 +6,7 @@ from widgetlords.pi_spi_din import *    # for AI module
 # from widgetlords.pi_spi import *        # for AO module
 from widgetlords import *               # for AI module
 from simple_pid import PID              # PID control library for actuation
+from os import system                   # Needed for clearing the screen
 
 init()                                  # required for controller
 thermister_inputs = Mod8AI(ChipEnable.CE0)  # AI board designation
@@ -25,12 +26,16 @@ condensor_therm_return_input = 1
 condensor_therm_supply_input = 3
 
 # PID value setting for tunning control
-dephlegmator_kvalue_proportional = 1
-dephlegmator_kvalue_integral = 0.1
-dephlegmator_kvalue_derivative = 0.05
-condensor_kvalue_proportional = 1
-condensor_kvalue_integral = 0.1
-condensor_kvalue_derivative = 0.05
+deph_kvalue_proportional = 1
+deph_kvalue_integral = 0.1
+deph_kvalue_derivative = 0.05
+cond_kvalue_proportional = 1
+cond_kvalue_integral = 0.1
+cond_kvalue_derivative = 0.05
+
+# function: clear screen
+def clear_screen():
+    _ = system("clear")
 
 # function: for celcius to Fahrenheit converstion for controller
 def celcius_to_fahrnheit(temp_c):
@@ -121,14 +126,15 @@ def test_valves_individual():
 # ************************************************************************* #
 
 # Define PID objects
-dephlegmator_pid = PID(dephlegmator_kvalue_proportional,dephlegmator_kvalue_integral,
-                       dephlegmator_kvalue_derivative,dephlegmator_temp_st)
-dephlegmator_pid.sample_time = 1
+# PID for dephlegmator
+dephlegmator_pid = PID(deph_kvalue_proportional,deph_kvalue_integral,deph_kvalue_derivative,dephlegmator_temp_st)
+dephlegmator_pid.sample_time = 5
 dephlegmator_pid.output_limits = (0, 100)
-condensor_pid = PID(condensor_kvalue_proportional,condensor_kvalue_integral,
-                    condensor_kvalue_derivative,condensor_temp_st)
-condensor_pid.sample_time = 1
-condensor_pid.output_limits = (0, 100)
+
+# PID for condensor
+# condensor_pid = PID(cond_kvalue_proportional,cond_kvalue_integral,cond_kvalue_derivative,condensor_temp_st)
+# condensor_pid.sample_time = 5
+# condensor_pid.output_limits = (0, 100)
 
 # Main loop
 while True:
@@ -138,15 +144,27 @@ while True:
     # test_valves_individual()
 
     # read temperatures and create readalable variables
-    # temperatures_f = read_temperatures()
-    # dephlegmator_temp_supply_f = temperatures_f[0]
-    # dephlegmator_temp_return_f = temperatures_f[1]
-    # condensor_temp_supply_f = temperatures_f[2]
-    # condensor_temp_return_f = temperatures_f[3]
+    temperatures_f = read_temperatures()
+    dephlegmator_temp_supply_f = temperatures_f[0]
+    dephlegmator_temp_return_f = temperatures_f[1]
+    condensor_temp_supply_f = temperatures_f[2]
+    condensor_temp_return_f = temperatures_f[3]
 
     # PID control - Uncomment to activate PID
-    # dephlegmator_valve_percent_cmd = dephlegmator_pid(dephlegmator_temp_return_f)
+    dephlegmator_valve_percent_cmd = dephlegmator_pid(dephlegmator_temp_return_f)
     # condensor_valve_percent_cmd = condensor_pid(condensor_temp_return_f)
 
-    # Insert a delay
+    # Command the valves
+    # command_valves(dephlegmator_vlv_percent_cmd,condensor_vlv_percent_cmd)
+    # Testing - Command dephlegmator
+    dephlegmator_vlv_da_cmd = percent_to_da(dephlegmator_vlv_percent_cmd)
+    valve_outputs.write_single(dephlegmator_vlv_output,dephlegmator_vlv_da_cmd)
+
+    # Testing - Display values to be tested
+    print("Temp St: {}".format(dephlegmator_temp_st))
+    print("Temp Read: {0:.2f}F".format(dephlegmator_temp_return_f))
+    print("VLV PID: {}".format(dephlegmator_vlv_da_cmd))
+
+    # Insert a delay & clear
     sleep(2)
+    clear_screen()
