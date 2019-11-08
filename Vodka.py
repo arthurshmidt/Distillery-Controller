@@ -1,12 +1,36 @@
 # PID control loop for a vodka setup on the still.
 # Need to command the PI -> AI and AO functions to control valve outputs
 # based on discharge temperture from the deflagmator and condensing column
+
+# ************************************************************************* #
+#                                                                           #
+#                         Modules and Classes                               #
+#                                                                           #
+# ************************************************************************* #
+
+# System Modules
 from time import sleep
-from widgetlords.pi_spi_din import *    # for AI module
-# from widgetlords.pi_spi import *        # for AO module
+from datetime import datetime
+from os import system                   # Needed for clearing the screen
+
+# Controller Modules
+from widgetlords.pi_spi_din import *    # for AI & AO module
 from widgetlords import *               # for AI module
 from simple_pid import PID              # PID control library for actuation
-from os import system                   # Needed for clearing the screen
+
+# Graphing Modules
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib import style
+
+# Data reading and writing
+import csv
+
+# ************************************************************************* #
+#                                                                           #
+#                    Initializations & Global variables                     #
+#                                                                           #
+# ************************************************************************* #
 
 init()                                  # required for controller
 thermister_inputs = Mod8AI(ChipEnable.CE0)  # AI board designation
@@ -32,6 +56,16 @@ deph_kvalue_derivative = -0.005
 cond_kvalue_proportional = 1
 cond_kvalue_integral = 0.1
 cond_kvalue_derivative = 0.05
+
+# CSV file information
+fieldnames = ["time_stamp","temp_st","temp_supply", "temp_return"]
+file_name = 'data.csv'
+
+# ************************************************************************* #
+#                                                                           #
+#                          Function Definitions                             #
+#                                                                           #
+# ************************************************************************* #
 
 # function: clear screen
 def clear_screen():
@@ -119,6 +153,42 @@ def test_valves_individual():
 
     _ = input("Press Enter to Continue.")
 
+# function: write data to CSV file
+# input: temp st, temp supply, temp return
+# output: append to CSV file
+def write_data(dephlegmator_temp_st,dephlegmator_temp_supply_f,dephlegmator_temp_return_f):
+    with open(file_name,'a') as csv_file:
+        csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+
+        info = {
+            "time_stamp": datetime.now().time(),
+            "temp_st": dephlegmator_temp_st,
+            "temp_supply": dephlegmator_temp_supply_f,
+            "temp_return": dephlegmator_temp_return_f
+        }
+
+        csv_writer.writerow(info)
+
+# function: live displays the temperatures of the condensing systems
+# input: temp st, temp supply, temp return
+# output: live graph of the system
+def animate_graph(i):
+    data = pd.read_csv(file_name)
+    xtime = data["time_stamp"]
+    yd_temp_st = ["temp_st"]
+    yd_temp_s = ["temp_supply"]
+    yd_temp_r = ["temp_return"]
+
+    plt.cla()
+    plt.plot(xtime, yd_temp_st, label="Set Point")
+    plt.plot(xtime, yd_temp_s, label="Supply Temp")
+    plt.plot(xtime, yd_temp_r, label="Return Temp")
+
+    plt.legend(loc="upper left")
+    plt.xlabel("Time")
+    plt.ylabel("Temperature")
+    plt.tight_layout()
+
 # ************************************************************************* #
 #                                                                           #
 #                                   Main Code                               #
@@ -135,6 +205,17 @@ dephlegmator_pid.output_limits = (30, 100)
 # condensor_pid = PID(cond_kvalue_proportional,cond_kvalue_integral,cond_kvalue_derivative,condensor_temp_st)
 # condensor_pid.sample_time = 5
 # condensor_pid.output_limits = (0, 100)
+
+# Open CSV file
+with open(file_name,'w') as csv_file:
+    csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+    csv_writer.writeheader()
+
+# Ploting
+plt.style.use('fivethirtyeight')        #cosider seaborn
+ani = animation(plt.gcf(), animate_graph, interval=1000)
+plt.tight_layout()
+plt.show()
 
 # Main loop
 while True:
@@ -165,7 +246,14 @@ while True:
     print("Temp St: {}".format(dephlegmator_temp_st))
     print("Temp Read: {0:.2f}F".format(dephlegmator_temp_return_f))
     print("VLV PID: {}".format(dephlegmator_vlv_percent_cmd))
-    print("PID - P: {}, I: {}, D: {}".format(p,i,d))    
+    print("PID - P: {}, I: {}, D: {}".format(p,i,d))
+
+    # Write data to file for Graphing
+    write_data(dephlegmator_temp_st,dephlegmator_temp_supply_f,dephlegmator_temp_return_f)
+
+    # Plotting
+    # plt.tight_layout()
+    # plt.show()
 
     # Insert a delay & clear
     sleep(2)
