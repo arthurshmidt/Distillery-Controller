@@ -26,9 +26,9 @@ condensor_therm_return_input = 1
 condensor_therm_supply_input = 3
 
 # PID value setting for tunning control
-deph_kvalue_proportional = 1
-deph_kvalue_integral = 0.1
-deph_kvalue_derivative = 0.05
+deph_kvalue_proportional = -.1
+deph_kvalue_integral = -0.01
+deph_kvalue_derivative = -0.005
 cond_kvalue_proportional = 1
 cond_kvalue_integral = 0.1
 cond_kvalue_derivative = 0.05
@@ -129,7 +129,7 @@ def test_valves_individual():
 # PID for dephlegmator
 dephlegmator_pid = PID(deph_kvalue_proportional,deph_kvalue_integral,deph_kvalue_derivative,dephlegmator_temp_st)
 dephlegmator_pid.sample_time = 5
-dephlegmator_pid.output_limits = (0, 100)
+dephlegmator_pid.output_limits = (30, 100)
 
 # PID for condensor
 # condensor_pid = PID(cond_kvalue_proportional,cond_kvalue_integral,cond_kvalue_derivative,condensor_temp_st)
@@ -151,20 +151,20 @@ while True:
     condensor_temp_return_f = temperatures_f[3]
 
     # PID control - Uncomment to activate PID
-    dephlegmator_valve_percent_cmd = dephlegmator_pid(dephlegmator_temp_return_f)
-    # condensor_valve_percent_cmd = condensor_pid(condensor_temp_return_f)
+    dephlegmator_vlv_percent_cmd = dephlegmator_pid(dephlegmator_temp_return_f)
+    # condensor_vlv_percent_cmd = condensor_pid(condensor_temp_return_f)
 
     # Command the valves
     # command_valves(dephlegmator_vlv_percent_cmd,condensor_vlv_percent_cmd)
     # Testing - Command dephlegmator
-    dephlegmator_vlv_da_cmd = percent_to_da(dephlegmator_vlv_percent_cmd)
+    dephlegmator_vlv_da_cmd = int(percent_to_da(dephlegmator_vlv_percent_cmd))
     valve_outputs.write_single(dephlegmator_vlv_output,dephlegmator_vlv_da_cmd)
     p, i, d = dephlegmator_pid.components
 
     # Testing - Display values to be tested
     print("Temp St: {}".format(dephlegmator_temp_st))
     print("Temp Read: {0:.2f}F".format(dephlegmator_temp_return_f))
-    print("VLV PID: {}".format(dephlegmator_vlv_da_cmd))
+    print("VLV PID: {}".format(dephlegmator_vlv_percent_cmd))
     print("PID - P: {}, I: {}, D: {}".format(p,i,d))    
 
     # Insert a delay & clear
