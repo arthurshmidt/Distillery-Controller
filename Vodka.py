@@ -20,7 +20,7 @@ from simple_pid import PID              # PID control library for actuation
 
 # Graphing Modules
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+import matplotlib.animation as FuncAnimation
 from matplotlib import style
 
 # Data reading and writing
@@ -213,7 +213,7 @@ with open(file_name,'w') as csv_file:
 
 # Ploting
 plt.style.use('fivethirtyeight')        #cosider seaborn
-ani = animation(plt.gcf(), animate_graph, interval=1000)
+animation_output = FuncAnimation(plt.gcf(), animate_graph, interval=1000)
 plt.tight_layout()
 plt.show()
 
