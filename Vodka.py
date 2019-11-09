@@ -172,7 +172,7 @@ def write_data(dephlegmator_temp_st,dephlegmator_temp_supply_f,dephlegmator_temp
 # function: live displays the temperatures of the condensing systems
 # input: temp st, temp supply, temp return
 # output: live graph of the system
-def animate_graph(i):
+def animate(i):
     data = pd.read_csv(file_name)
     xtime = data["time_stamp"]
     yd_temp_st = ["temp_st"]
@@ -213,7 +213,7 @@ with open(file_name,'w') as csv_file:
 
 # Ploting
 plt.style.use('fivethirtyeight')        #cosider seaborn
-animation_output = FuncAnimation(plt.gcf(), animate_graph, interval=1000)
+animation_output = FuncAnimation(plt.gcf(), animate, interval=1000)
 plt.tight_layout()
 plt.show()
 
