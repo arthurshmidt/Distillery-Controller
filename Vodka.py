@@ -20,7 +20,7 @@ from simple_pid import PID              # PID control library for actuation
 
 # Graphing Modules
 import matplotlib.pyplot as plt
-import matplotlib.animation as FuncAnimation
+import matplotlib as FuncAnimation
 from matplotlib import style
 
 # Data reading and writing
