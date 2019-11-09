@@ -10,6 +10,7 @@
 
 # System Modules
 from time import sleep
+from time import time
 from datetime import datetime
 from os import system                   # Needed for clearing the screen
 
@@ -161,7 +162,7 @@ def write_data(dephlegmator_temp_st,dephlegmator_temp_supply_f,dephlegmator_temp
         csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
 
         info = {
-            "time_stamp": datetime.now().time(),
+            "time_stamp": time(),
             "temp_st": dephlegmator_temp_st,
             "temp_supply": dephlegmator_temp_supply_f,
             "temp_return": dephlegmator_temp_return_f
