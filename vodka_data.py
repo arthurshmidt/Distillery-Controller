@@ -59,7 +59,7 @@ cond_kvalue_integral = 0.1
 cond_kvalue_derivative = 0.05
 
 # CSV file information
-fieldnames = ["time_stamp","temp_st","temp_supply", "temp_return"]
+fieldnames = ["time_stamp","temp_st","temp_supply","temp_return"]
 file_name = 'data.csv'
 
 # ************************************************************************* #
@@ -157,12 +157,12 @@ def test_valves_individual():
 # function: write data to CSV file
 # input: temp st, temp supply, temp return
 # output: append to CSV file
-def write_data(dephlegmator_temp_st,dephlegmator_temp_supply_f,dephlegmator_temp_return_f):
+def write_data(time_stamp,dephlegmator_temp_st,dephlegmator_temp_supply_f,dephlegmator_temp_return_f):
     with open(file_name,'a') as csv_file:
         csv_writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
 
         info = {
-            "time_stamp": time(),
+            "time_stamp": time_stamp,
             "temp_st": dephlegmator_temp_st,
             "temp_supply": dephlegmator_temp_supply_f,
             "temp_return": dephlegmator_temp_return_f
@@ -213,10 +213,10 @@ with open(file_name,'w') as csv_file:
     csv_writer.writeheader()
 
 # Ploting
-plt.style.use('fivethirtyeight')        #cosider seaborn
-animation_output = FuncAnimation(plt.gcf(), animate, interval=1000)
-plt.tight_layout()
-plt.show()
+# plt.style.use('fivethirtyeight')        #cosider seaborn
+# animation_output = FuncAnimation(plt.gcf(), animate, interval=1000)
+# plt.tight_layout()
+# plt.show()
 
 # Main loop
 while True:
@@ -250,8 +250,8 @@ while True:
     print("PID - P: {}, I: {}, D: {}".format(p,i,d))
 
     # Write data to file for Graphing
-    write_data(dephlegmator_temp_st,dephlegmator_temp_supply_f,dephlegmator_temp_return_f)
-
+    write_data(time_stamp,dephlegmator_temp_st,dephlegmator_temp_supply_f,dephlegmator_temp_return_f)
+    time_stamp += 1
     # Plotting
     # plt.tight_layout()
     # plt.show()
