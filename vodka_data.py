@@ -59,6 +59,10 @@ cond_kvalue_integral = 0.1
 cond_kvalue_derivative = 0.05
 
 # CSV file information
+time_stamp = 0
+temp_st = 0
+temp_supply = 0
+temp_return = 0
 fieldnames = ["time_stamp","temp_st","temp_supply","temp_return"]
 file_name = 'data.csv'
 
