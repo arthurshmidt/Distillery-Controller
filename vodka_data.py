@@ -240,6 +240,11 @@ while True:
     dephlegmator_vlv_percent_cmd = dephlegmator_pid(dephlegmator_temp_return_f)
     # condensor_vlv_percent_cmd = condensor_pid(condensor_temp_return_f)
 
+    # Read in stpt from file
+    with open('stpt.txt','r') as stpt_file:
+        stpts = [line.strip().split() for line in stpt_file]
+        dephlegmator_temp_st = stpts[0][0]
+
     # Command the valves
     # command_valves(dephlegmator_vlv_percent_cmd,condensor_vlv_percent_cmd)
     # Testing - Command dephlegmator
