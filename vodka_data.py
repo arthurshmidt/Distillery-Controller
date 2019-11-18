@@ -51,9 +51,9 @@ condensor_therm_return_input = 1
 condensor_therm_supply_input = 3
 
 # PID value setting for tunning control
-deph_kvalue_proportional = -.1
+deph_kvalue_proportional = -1
 deph_kvalue_integral = -0.01
-deph_kvalue_derivative = -0.005
+deph_kvalue_derivative = 0.0
 cond_kvalue_proportional = 1
 cond_kvalue_integral = 0.1
 cond_kvalue_derivative = 0.05
@@ -203,8 +203,8 @@ def animate(i):
 # Define PID objects
 # PID for dephlegmator
 dephlegmator_pid = PID(deph_kvalue_proportional,deph_kvalue_integral,deph_kvalue_derivative,dephlegmator_temp_st)
-dephlegmator_pid.sample_time = 5
-dephlegmator_pid.output_limits = (50, 100)
+dephlegmator_pid.sample_time = 1
+dephlegmator_pid.output_limits = (40, 100)
 
 # PID for condensor
 # condensor_pid = PID(cond_kvalue_proportional,cond_kvalue_integral,cond_kvalue_derivative,condensor_temp_st)
@@ -244,6 +244,9 @@ while True:
     with open('stpt.txt','r') as stpt_file:
         stpts = [line.strip().split() for line in stpt_file]
         dephlegmator_temp_st = stpts[0][0]
+
+    # Reset PID setpoint
+    dephlegmator_pid.setpoint = int(dephlegmator_temp_st)
 
     # Command the valves
     # command_valves(dephlegmator_vlv_percent_cmd,condensor_vlv_percent_cmd)
