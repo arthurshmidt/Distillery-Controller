@@ -64,7 +64,7 @@ temp_st = 0
 temp_supply = 0
 temp_return = 0
 fieldnames = ["time_stamp","temp_st","temp_supply","temp_return"]
-file_name = 'data.csv'
+file_name = 'gin-data.csv'
 
 # ************************************************************************* #
 #                                                                           #
@@ -210,6 +210,12 @@ dephlegmator_pid.output_limits = (40, 100)
 # condensor_pid = PID(cond_kvalue_proportional,cond_kvalue_integral,cond_kvalue_derivative,condensor_temp_st)
 # condensor_pid.sample_time = 5
 # condensor_pid.output_limits = (0, 100)
+
+# Command System to inital positions
+outputs.write_single(0,4000)
+outputs.write_single(1,4000)
+print("Valves commanded fully open.")
+_ = input("Press Enter to continue")
 
 # Open CSV file
 with open(file_name,'w') as csv_file:
