@@ -14,7 +14,7 @@ temp_return = []
 index = count()
 
 def animate(i):
-    data = pd.read_csv('data.csv')
+    data = pd.read_csv('data-whiskey.csv')
     time_stamp = data['time_stamp']
     temp_st = data['temp_st']
     temp_supply = data['temp_supply']

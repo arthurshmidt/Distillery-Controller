@@ -64,7 +64,7 @@ temp_st = 0
 temp_supply = 0
 temp_return = 0
 fieldnames = ["time_stamp","temp_st","temp_supply","temp_return"]
-file_name = 'data-gin.csv'
+file_name = 'data-whiskey.csv'
 
 # ************************************************************************* #
 #                                                                           #
@@ -247,7 +247,7 @@ while True:
     # condensor_vlv_percent_cmd = condensor_pid(condensor_temp_return_f)
 
     # Read in stpt from file
-    with open('stpt-gin.txt','r') as stpt_file:
+    with open('stpt-whiskey.txt','r') as stpt_file:
         stpts = [line.strip().split() for line in stpt_file]
         dephlegmator_temp_st = stpts[0][0]
 
