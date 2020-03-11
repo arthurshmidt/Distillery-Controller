@@ -13,8 +13,8 @@ from os import system           # Needed for clearing the screen
 
 # Controller Modules
 from widgetlords.pi_spi_din import *    # for AI & AO Module
-from Widgetloards import *              # for AI module
-from simple_pid import pi_spi_din       # PID control library for actuation
+from widgetlords import *              # for AI module
+from simple_pid import PID       # PID control library for actuation
 
 # ************************************************************************* #
 #                                                                           #
@@ -52,7 +52,7 @@ def test_valve():
     valve_outputs.write_single(2,800)
     _ = input("Entered a DA of 800 on Pin-out 2")
     valve_outputs.write_single(2,4000)
-    _ = input("Entered a DA of 4000 on Pin-out 0,1")
+    _ = input("Entered a DA of 4000 on Pin-out 2")
 
 # ************************************************************************* #
 #                                                                           #
