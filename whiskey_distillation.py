@@ -204,7 +204,7 @@ def animate(i):
 # PID for dephlegmator
 dephlegmator_pid = PID(deph_kvalue_proportional,deph_kvalue_integral,deph_kvalue_derivative,dephlegmator_temp_st)
 dephlegmator_pid.sample_time = 1
-dephlegmator_pid.output_limits = (40, 100)
+dephlegmator_pid.output_limits = (30, 100)
 
 # PID for condensor
 # condensor_pid = PID(cond_kvalue_proportional,cond_kvalue_integral,cond_kvalue_derivative,condensor_temp_st)
@@ -212,8 +212,8 @@ dephlegmator_pid.output_limits = (40, 100)
 # condensor_pid.output_limits = (0, 100)
 
 # Command System to inital positions
-outputs.write_single(0,4000)
-outputs.write_single(1,4000)
+valve_outputs.write_single(0,4000)
+valve_outputs.write_single(1,4000)
 print("Valves commanded fully open.")
 _ = input("Press Enter to continue")
 
