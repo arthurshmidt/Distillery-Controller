@@ -10,6 +10,7 @@
 
 # system Modules
 from os import system           # Needed for clearing the screen
+from time import sleep
 
 # Controller Modules
 from widgetlords.pi_spi_din import *    # for AI & AO Module
@@ -29,6 +30,7 @@ valve_outputs = Mod4AO()                    # AO Board designation
 
 # Global Variables
 supply_temp_st = 90
+therm_calibration_factor = 3.0
 
 # Board addresses for controllers
 dephlegmator_vlv_output = 0
@@ -140,11 +142,11 @@ while True:
     condensor_temp_return_f = temperatures_f[3]
 
     # PID control - Uncomment to activate PID
-    supply_vlv_percent_cmd = dephlegmator_pid(dephlegmator_temp_supply_f)
+    supply_vlv_percent_cmd = supply_pid(dephlegmator_temp_supply_f)
 
     # Command the valves
     command_valves(supply_vlv_percent_cmd)
-    p, i, d = dephlegmator_pid.components
+    p, i, d = supply_pid.components
 
     # Testing - Display values to be tested
     print("Temp St: {}".format(supply_temp_st))
