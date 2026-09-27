@@ -1,0 +1,44 @@
+# Runtime configuration for the still controller daemon.
+# See PLAN.md and CLAUDE.md for background; values here are carried over
+# from original/whiskey_distillation.py and original/gin_distillation.py.
+
+thermistor:
+  r_fixed: 10000
+  beta: 3380
+  adc_max: 4095
+  calibration_factor: 3.0
+
+# PI-SPI-DIN board channel map (original/*_distillation.py).
+channels:
+  ai:
+    deph_return: 0
+    cond_return: 1
+    deph_supply: 2
+    cond_supply: 3
+  ao:
+    dephlegmator: 0
+    condenser: 1
+
+default_profile: whiskey
+
+# The condenser valve is held fully open for now (see PLAN.md); only the
+# dephlegmator is under PID control. Each profile's setpoint comes from the
+# corresponding stpt-*.txt in original/, and the PID gains and output limits
+# from the matching *_distillation.py.
+profiles:
+  whiskey:
+    setpoint_f: 130
+    pid:
+      p: -1.0
+      i: -0.01
+      d: 0.0
+    output_limits: [30, 100]
+    sample_time: 1.0
+  gin:
+    setpoint_f: 120
+    pid:
+      p: -1.0
+      i: -0.01
+      d: 0.0
+    output_limits: [40, 100]
+    sample_time: 1.0
