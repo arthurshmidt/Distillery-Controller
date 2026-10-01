@@ -41,11 +41,12 @@ Every script runs its main loop at import time, so nothing is importable or unit
 
 ## Daemon (src/still/)
 
-New work replacing `original/` with a daemon plus a web GUI; see `PLAN.md` for the full design and phased roadmap. Currently implemented (phases 1 and 2): config loading, the `Controller` (dephlegmator PID, condenser held fully open via `_condenser_percent()`, auto/manual/off modes, profile switching, failsafe), and a `SimulatedHW`/`WidgetlordsHW` hardware split so the controller is testable off the Pi.
+New work replacing `original/` with a daemon plus a web GUI; see `PLAN.md` for the full design and phased roadmap. Currently implemented (phases 1, 2 and 4): config loading, the `Controller` (dephlegmator PID, condenser held fully open via `_condenser_percent()`, auto/manual/off modes, profile switching, failsafe), and a `SimulatedHW`/`WidgetlordsHW` hardware split so the controller is testable off the Pi.
 
 - **Failsafe:** both valves fully open. Each valve write is attempted independently, and a read error, out-of-range or NaN temperature, or valve write error in auto/manual mode triggers it. It records the temperatures `tick()` already read and does not re-read the sensors.
 - **Profile switching:** `set_profile()` rebuilds the PID and setpoint but keeps the current mode and any manual valve positions.
 - **Sensor check:** `WidgetlordsHW` passes raw counts through `check_counts()` (`conversions.py`), which raises `SensorError` within 10 counts of either end of the ADC range (open or shorted thermistor). The 10-count margin is an estimate and still needs checking on the Pi.
+- **API and running:** `api.py` (FastAPI app factory), `runner.py` (control loop thread plus in-memory history) and `__main__.py`. Run with `STILL_TOKEN=<token> .venv/bin/still --simulate` (add `--host <lan-ip>` to expose it; it binds to 127.0.0.1 by default). `docs/openapi.json` is the exported contract for the front end.
 - **Dev setup:** the system Python is externally managed, so use a venv: `python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"`.
 - **Tests:** `.venv/bin/python -m pytest`. These run entirely against `SimulatedHW` and don't need any hardware.
 - **Testing against real hardware:** only possible on the Pi with the boards attached, running `WidgetlordsHW` (a direct port of the `original/` board access code) instead of `SimulatedHW`. This is phase 3 of `PLAN.md`, once the API (phase 4) is far enough along to drive the controller, or by exercising `WidgetlordsHW` directly the way `original/display_temperatures.py` and `original/testing_cmd_vlv_*.py` were used. Until then, `widgetlords` isn't installed here, and `WidgetlordsHW` raises a clear `RuntimeError` if instantiated off the Pi.
