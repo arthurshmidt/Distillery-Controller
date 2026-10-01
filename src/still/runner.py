@@ -1,8 +1,8 @@
-"""The control loop thread, plus an in-memory history for `/api/history`.
+"""The control loop thread, which also records each tick to the `Store`
+(SQLite) that backs `/api/history`.
 
 The loop lives in its own thread so a slow or stuck web request can never
-stall the PID (see PLAN.md). History is a bounded in-memory ring buffer for
-now; phase 5 replaces it with SQLite.
+stall the PID (see PLAN.md).
 """
 
 from __future__ import annotations
@@ -10,27 +10,19 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from collections import deque
-from dataclasses import dataclass
-from typing import Deque, List, Optional
+from typing import List, Optional
 
-from .controller import Controller, ControllerState
+from .controller import Controller
+from .store import HistoryPoint, Store
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class HistoryPoint:
-    timestamp: float
-    state: ControllerState
-
-
 class ControlLoop:
-    def __init__(self, controller: Controller, interval_s: float = 1.0, history_size: int = 7200):
+    def __init__(self, controller: Controller, interval_s: float = 1.0, store: Optional[Store] = None):
         self._controller = controller
         self._interval_s = interval_s
-        self._history: Deque[HistoryPoint] = deque(maxlen=history_size)
-        self._history_lock = threading.Lock()
+        self._store = store if store is not None else Store()
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
@@ -50,25 +42,23 @@ class ControlLoop:
         self._controller.failsafe("shutdown", is_fault=False)
 
     def history(self, since: Optional[float] = None, limit: Optional[int] = None) -> List[HistoryPoint]:
-        with self._history_lock:
-            points = list(self._history)
-        if since is not None:
-            points = [p for p in points if p.timestamp > since]
-        if limit is not None:
-            points = points[-limit:] if limit > 0 else []
-        return points
+        return self._store.history(since=since, limit=limit)
 
     def _run(self) -> None:
         while not self._stop.is_set():
             started = time.monotonic()
             try:
                 state = self._controller.tick()
-                with self._history_lock:
-                    self._history.append(HistoryPoint(time.time(), state))
             except Exception:
                 logger.exception("control loop iteration failed")
                 try:
-                    self._controller.failsafe("control loop error")
+                    state = self._controller.failsafe("control loop error")
                 except Exception:
                     logger.exception("failsafe failed")
+                    state = None
+            if state is not None:
+                try:
+                    self._store.add_history(time.time(), state)
+                except Exception:
+                    logger.exception("could not record history")
             self._stop.wait(max(0.0, self._interval_s - (time.monotonic() - started)))

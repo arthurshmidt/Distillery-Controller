@@ -49,13 +49,13 @@ web GUI ──HTTP/SSE──> FastAPI ──> Controller (state snapshot + comma
   - Condenser: held at 100% open for now. The originals' condenser PID (P=1, I=0.1, D=0.05, limits 0-100, 5 s sample, setpoint 150 F) was commented out and never run; it is not used, and no condenser gains or setpoint are exposed until control is needed.
 
 ## Phases
-Status: phases 1, 2 and 4 are done. Phase 3 needs the Pi.
+Status: phases 1, 2, 4 and 5 are done. Phase 3 needs the Pi.
 
 1. **Skeleton (done):** package layout, config and profile loading, hardware interface plus simulator, controller reproducing the whiskey dephlegmator behaviour.
 2. **Condenser and profiles (done):** condenser valve held 100% open (structured so a PID can be added later), profile switching, failsafe and sensor sanity checks (out-of-range counts trigger the failsafe). Implemented as `check_counts()` in the hardware layer plus a temperature range check in the controller.
 3. **Real hardware:** the `widgetlords` implementation; verify on the Pi against `display_temperatures.py` and the `testing_cmd_vlv_*` behaviour. Also confirm the `check_counts()` margin (10 counts) against real open, shorted and hot-thermistor readings.
-4. **API (done):** endpoints, SSE stream, token auth (`Authorization: Bearer`, or `?token=` for the SSE stream). Spec exported to `docs/openapi.json`; regenerate it when the API changes. `/api/history` is backed by an in-memory ring buffer until phase 5.
-5. **Persistence and logging:** SQLite history, saved setpoints and active profile.
+4. **API (done):** endpoints, SSE stream, token auth (`Authorization: Bearer`, or `?token=` for the SSE stream). Spec exported to `docs/openapi.json`; regenerate it when the API changes.
+5. **Persistence and logging (done):** `store.py`. SQLite history (one row per loop, 14 days kept, `/api/history` returns the newest 7200 points unless `limit` says otherwise) and saved settings: the active profile plus each profile's setpoint and PID gains. The mode is deliberately not saved; the daemon always starts in auto. `--db` sets the file (default `still.db`).
 6. **Daemonize:** systemd unit, log output, clean shutdown to the failsafe position.
 7. **Front end:** built with Claude Design against the spec, served by the daemon.
 8. **Tests:** unit tests on the simulator (conversions, PID limits, failsafe) and API tests.
