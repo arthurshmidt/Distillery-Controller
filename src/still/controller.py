@@ -74,6 +74,7 @@ class Controller:
         self._manual_valves: Dict[str, float] = {}
         self._state = ControllerState()
         self.set_profile(profile_name or config.default_profile)
+        self.set_mode(Mode.AUTO)
         self.failsafe("startup", is_fault=False)
 
     # -- commands, safe to call from any thread ---------------------------
@@ -84,7 +85,6 @@ class Controller:
             self._pid = self._build_pid(profile)
             self._state.profile = name
             self._state.setpoint_f = profile.setpoint_f
-            self._state.mode = Mode.AUTO
 
     def set_setpoint(self, setpoint_f: float) -> None:
         with self._lock:
@@ -118,33 +118,50 @@ class Controller:
             return self.failsafe(f"read error: {exc}")
 
         if not self._is_sane(temps):
-            return self.failsafe(f"temperature reading out of range: {temps}")
+            return self.failsafe(f"temperature reading out of range: {temps}", temps=temps)
 
         with self._lock:
             mode = self._state.mode
 
         if mode == Mode.OFF:
-            return self.failsafe("off")
-        if mode == Mode.MANUAL:
-            return self._apply_manual(temps)
-        return self._apply_auto(temps)
+            return self.failsafe("off", temps=temps)
+        try:
+            if mode == Mode.MANUAL:
+                return self._apply_manual(temps)
+            return self._apply_auto(temps)
+        except Exception as exc:
+            logger.exception("failed to command valves")
+            return self.failsafe(f"write error: {exc}", temps=temps)
 
-    def failsafe(self, reason: str, *, is_fault: bool = True) -> ControllerState:
+    def failsafe(
+        self,
+        reason: str,
+        *,
+        is_fault: bool = True,
+        temps: Optional[Temperatures] = None,
+    ) -> ControllerState:
+        """Open both valves fully. Each valve is attempted independently, so
+        one failing write does not stop the other from being commanded."""
         if is_fault:
             logger.warning("failsafe: %s", reason)
         valves = {"dephlegmator": FAILSAFE_PERCENT, "condenser": FAILSAFE_PERCENT}
-        self._write_valves(valves)
-        try:
-            temps = self._hw.read_temperatures()
-        except Exception:
-            temps = None
-        return self._record(temps, valves, (0.0, 0.0, 0.0), fault=reason if is_fault else None)
+        errors = []
+        for name, percent in valves.items():
+            try:
+                self._hw.write_valve(name, percent)
+            except Exception as exc:
+                logger.exception("failsafe could not command the %s valve", name)
+                errors.append(f"{name} valve write failed: {exc}")
+        fault = reason if is_fault else None
+        if errors:
+            fault = "; ".join(filter(None, [fault, *errors]))
+        return self._record(temps, valves, (0.0, 0.0, 0.0), fault=fault)
 
     def _apply_auto(self, temps: Temperatures) -> ControllerState:
         with self._lock:
             deph_pct = self._pid(temps.deph_return)
             p, i, d = self._pid.components
-        valves = {"dephlegmator": deph_pct, "condenser": CONDENSER_PERCENT}
+        valves = {"dephlegmator": deph_pct, "condenser": self._condenser_percent(temps)}
         self._write_valves(valves)
         return self._record(temps, valves, (p, i, d), fault=None)
 
@@ -152,7 +169,7 @@ class Controller:
         with self._lock:
             valves = {
                 "dephlegmator": self._manual_valves.get("dephlegmator", FAILSAFE_PERCENT),
-                "condenser": self._manual_valves.get("condenser", CONDENSER_PERCENT),
+                "condenser": self._manual_valves.get("condenser", self._condenser_percent(temps)),
             }
         self._write_valves(valves)
         return self._record(temps, valves, (0.0, 0.0, 0.0), fault=None)
@@ -170,6 +187,11 @@ class Controller:
         pid.sample_time = profile.sample_time
         pid.output_limits = tuple(profile.output_limits)
         return pid
+
+    def _condenser_percent(self, temps: Temperatures) -> float:
+        """Condenser valve position in auto mode. Held fully open for now; a
+        condenser PID would replace this body (see PLAN.md)."""
+        return CONDENSER_PERCENT
 
     def _write_valves(self, valves: Dict[str, float]) -> None:
         for name, percent in valves.items():

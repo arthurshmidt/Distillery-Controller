@@ -10,7 +10,7 @@ boards attached; see PLAN.md phase 3 for verifying it there.
 from __future__ import annotations
 
 from ..config import AppConfig
-from ..conversions import celsius_to_fahrenheit, percent_to_da
+from ..conversions import celsius_to_fahrenheit, check_counts, percent_to_da
 from .base import HardwareInterface, Temperatures
 
 try:
@@ -41,7 +41,9 @@ class WidgetlordsHW(HardwareInterface):
         t = self._thermistor
 
         def read_f(channel_name: str) -> float:
-            da = self._ai.read_single(self._ai_channels[channel_name])
+            da = check_counts(
+                self._ai.read_single(self._ai_channels[channel_name]), t.adc_max, channel_name
+            )
             c = steinhart_hart(t.r_fixed, t.beta, t.adc_max, da) - t.calibration_factor
             return celsius_to_fahrenheit(c)
 
