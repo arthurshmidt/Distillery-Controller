@@ -1,0 +1,127 @@
+# Distillery Controller
+
+Controller for the Shmidt Spirits still, running on a Raspberry Pi. A daemon holds the dephlegmator at a temperature setpoint with a PID loop and exposes an HTTP API for a web GUI on the local network.
+
+The `original/` folder holds the earlier standalone scripts. It is a frozen copy kept for reference and is not edited. The daemon in `src/still/` replaces those scripts.
+
+## How it works
+
+The still has two water-cooled stages, the **dephlegmator** and the **condenser**. Each has a supply and a return thermistor and a 4-20 mA valve.
+
+- **Dephlegmator:** a PID loop reads the return temperature and moves the valve to hold the setpoint. The default gains are P=-1, I=-0.01, D=0. The valve is limited to 30-100% for whiskey and 40-100% for gin.
+- **Condenser:** held fully open. There is no condenser PID yet.
+- **Profiles:** `whiskey` and `gin` each carry their own setpoint, PID gains and valve limits (`config/still.yaml`). The active profile is chosen from the GUI.
+- **Modes:**
+  - `auto`: the PID runs.
+  - `manual`: the operator sets the valve positions.
+  - `off`: both valves open.
+- **Failsafe:** both valves fully open. It is applied in `off` mode, on shutdown, and when a fault is detected: a sensor read error, an out-of-range or NaN temperature, or a valve write error. The reason is reported in the `fault` field of the state.
+- **Sensor check:** raw ADC counts within 10 counts of either end of the range are treated as an open or shorted thermistor. The 10-count margin is an estimate and still needs checking on the Pi.
+
+### Signal chain
+
+Thermistor counts go through the Steinhart-Hart conversion (10 kΩ, beta 3380, 12-bit ADC), minus a 3.0 °C calibration offset, then to Fahrenheit. Valve percent maps to DA counts as `800 + 32 * percent` (800 = 4 mA, 4000 = 20 mA).
+
+Channels (see `config/still.yaml`):
+
+| Input | Sensor | Output | Valve |
+|---|---|---|---|
+| AI 0 | dephlegmator return | AO 0 | dephlegmator |
+| AI 1 | condenser return | AO 1 | condenser |
+| AI 2 | dephlegmator supply | | |
+| AI 3 | condenser supply | | |
+
+### Architecture
+
+```
+web GUI ──HTTP/SSE──> FastAPI ──> Controller (state snapshot + commands)
+                                        │
+                        control loop thread ──> hardware layer
+                                        │          ├─ WidgetlordsHW (real boards)
+                                        └─> SQLite └─ SimulatedHW (dev/test)
+```
+
+The control loop runs in its own thread, so the web server can never stall the PID. The API reads a lock-protected state snapshot.
+
+| File | Role |
+|---|---|
+| `src/still/config.py` | loads `config/still.yaml` |
+| `src/still/controller.py` | PID, modes, profiles, failsafe |
+| `src/still/hardware/` | `base.py` interface, `simulated.py`, `widgetlords.py` |
+| `src/still/conversions.py` | thermistor and valve conversions, sensor check |
+| `src/still/runner.py` | control loop thread |
+| `src/still/store.py` | SQLite history and saved settings |
+| `src/still/api.py` | FastAPI app |
+| `src/still/__main__.py` | the `still` command |
+| `deploy/still.service` | systemd unit |
+
+## Setup
+
+The system Python is externally managed, so use a virtual environment:
+
+```
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+```
+
+## Running
+
+```
+STILL_TOKEN=<token> .venv/bin/still --simulate
+```
+
+`--simulate` uses the simulated hardware, so it runs on any machine. Without it the daemon uses the real boards and only works on the Pi with `widgetlords` installed.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--config` | `config/still.yaml` | config file |
+| `--host` | `127.0.0.1` | bind address; use the LAN address (or `0.0.0.0`) to expose it |
+| `--port` | `8000` | port |
+| `--simulate` | off | use `SimulatedHW` |
+| `--db` | `still.db` | SQLite file for history and saved settings |
+| `--interval` | `1.0` | control loop period, seconds |
+
+`STILL_TOKEN` is required. Interactive API docs are at `/docs`.
+
+### Persistence
+
+Each loop is logged to SQLite, and 14 days are kept. The active profile and each profile's setpoint and PID gains are saved and restored on restart. The mode is never saved: the daemon always starts in `auto`.
+
+### Running as a service
+
+`deploy/still.service` is a systemd unit. Edit the user and paths for the Pi. The token goes in `/etc/still/still.env` as `STILL_TOKEN=<token>` (chmod 600). On stop, SIGTERM makes the daemon open both valves before it exits. This has not been tried on a Pi yet.
+
+## API
+
+All `/api` routes require the token as `Authorization: Bearer <token>`. The SSE stream also accepts `?token=<token>`, because a browser `EventSource` cannot set headers. The full contract is `docs/openapi.json`. Regenerate it when the API changes.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/state` | temperatures, valve %, setpoint, mode, profile, PID terms and gains, fault |
+| `GET /api/stream` | server-sent events: the full state once a second |
+| `GET /api/history` | logged states; `since` (unix time) and `limit` (default 7200, newest kept) |
+| `GET /api/profiles` | list profiles and the active one |
+| `PUT /api/profile` | `{"name": ...}` select the active profile; keeps the current mode and manual valves |
+| `PUT /api/setpoint` | `{"setpoint_f": ...}` between -40 and 300 |
+| `PUT /api/mode` | `{"mode": "auto" \| "manual" \| "off"}` |
+| `PUT /api/valves/{name}` | `{"percent": 0-100}` for `dephlegmator` or `condenser`; manual mode only, otherwise 409 |
+| `PUT /api/pid` | `{"p": ..., "i": ..., "d": ...}` |
+
+## Tests
+
+```
+.venv/bin/python -m pytest
+```
+
+The tests run entirely against `SimulatedHW` and need no hardware.
+
+## Status
+
+Phases 1, 2, 4, 5 and 6 of [`PLAN.md`](PLAN.md) are done. Still to do:
+
+- **Phase 3:** verify against the real boards on the Pi, including the sensor-check margin and the systemd shutdown.
+- **Phase 7:** the web front end, built with Claude Design. See [`docs/frontend-brief.md`](docs/frontend-brief.md).
+
+## Safety
+
+The API can move valves, so keep it on the LAN and keep the token secret. Test changes with `--simulate` before running them on the still.
