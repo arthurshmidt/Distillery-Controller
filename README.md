@@ -1,21 +1,22 @@
 # Distillery Controller
 
-Controller for the Shmidt Spirits still, running on a Raspberry Pi. A daemon holds the dephlegmator at a temperature setpoint with a PID loop and exposes an HTTP API for a web GUI on the local network.
+Controller for the Shmidt Spirits still, running on a Raspberry Pi. A daemon holds the water bath and the dephlegmator at temperature setpoints with PID loops and exposes an HTTP API for a web GUI on the local network.
 
 The `original/` folder holds the earlier standalone scripts. It is a frozen copy kept for reference and is not edited. The daemon in `src/still/` replaces those scripts.
 
 ## How it works
 
-The still has two water-cooled stages, the **dephlegmator** and the **condenser**. Each has a supply and a return thermistor and a 4-20 mA valve.
+City water feeds a **water bath** through the **supply valve**. The bath also receives the warm return water from the two water-cooled stages, the **dephlegmator** and the **condenser**, and its outlet is their inlet. Each stage has a supply and a return thermistor and a 4-20 mA valve.
 
+- **Supply (city water):** a PID loop reads the dephlegmator supply temperature (the bath outlet, which is also the inlet of both stages) and moves the supply valve to hold the setpoint (default 90 °F; P=-1, I=-0.01, D=0; valve limited to 0-60%). This is the `original/supply.py` loop. It is one shared setting in `config/still.yaml`, not per profile.
 - **Dephlegmator:** a PID loop reads the return temperature and moves the valve to hold the setpoint. The default gains are P=-1, I=-0.01, D=0. The valve is limited to 30-100% for whiskey and 40-100% for gin.
 - **Condenser:** held fully open. There is no condenser PID yet.
 - **Profiles:** `whiskey` and `gin` each carry their own setpoint, PID gains and valve limits (`config/still.yaml`). The active profile is chosen from the GUI.
 - **Modes:**
   - `auto`: the PID runs.
   - `manual`: the operator sets the valve positions.
-  - `off`: both valves open.
-- **Failsafe:** both valves fully open. It is applied in `off` mode, on shutdown, and when a fault is detected: a sensor read error, an out-of-range or NaN temperature, or a valve write error. The reason is reported in the `fault` field of the state.
+  - `off`: the dephlegmator and condenser valves open; the supply valve holds its last position.
+- **Failsafe:** the dephlegmator and condenser valves fully open. The supply valve is not moved: it holds its last position (it is not commanded at all until the first auto tick after startup). It is applied in `off` mode, on shutdown, and when a fault is detected: a sensor read error, an out-of-range or NaN temperature, or a valve write error. The reason is reported in the `fault` field of the state.
 - **Sensor check:** raw ADC counts within 10 counts of either end of the range are treated as an open or shorted thermistor. The 10-count margin is an estimate and still needs checking on the Pi.
 
 ### Signal chain
@@ -29,7 +30,7 @@ Channels (see `config/still.yaml`):
 | AI 0 | dephlegmator return | AO 0 | dephlegmator |
 | AI 1 | condenser return | AO 1 | condenser |
 | AI 2 | dephlegmator supply | | |
-| AI 3 | condenser supply | | |
+| AI 3 | condenser supply | AO 2 | supply (city water) |
 
 ### Architecture
 
@@ -85,11 +86,11 @@ STILL_TOKEN=<token> .venv/bin/still --simulate
 
 ### Persistence
 
-Each loop is logged to SQLite, and 14 days are kept. The active profile and each profile's setpoint and PID gains are saved and restored on restart. The mode is never saved: the daemon always starts in `auto`.
+Each loop is logged to SQLite, and 14 days are kept. The active profile, each profile's setpoint and PID gains, and the supply setpoint and gains are saved and restored on restart. The mode is never saved: the daemon always starts in `auto`.
 
 ### Running as a service
 
-`deploy/still.service` is a systemd unit. Edit the user and paths for the Pi. The token goes in `/etc/still/still.env` as `STILL_TOKEN=<token>` (chmod 600). On stop, SIGTERM makes the daemon open both valves before it exits. This has not been tried on a Pi yet.
+`deploy/still.service` is a systemd unit. Edit the user and paths for the Pi. The token goes in `/etc/still/still.env` as `STILL_TOKEN=<token>` (chmod 600). On stop, SIGTERM makes the daemon open the dephlegmator and condenser valves before it exits. This has not been tried on a Pi yet.
 
 ## API
 
@@ -97,15 +98,17 @@ All `/api` routes require the token as `Authorization: Bearer <token>`. The SSE 
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/state` | temperatures, valve %, setpoint, mode, profile, PID terms and gains, fault |
+| `GET /api/state` | temperatures, valve %, setpoints, mode, profile, PID terms and gains (dephlegmator and supply), fault; `valves_pct.supply` is absent until it is first commanded |
 | `GET /api/stream` | server-sent events: the full state once a second |
 | `GET /api/history` | logged states; `since` (unix time) and `limit` (default 7200, newest kept) |
 | `GET /api/profiles` | list profiles and the active one |
 | `PUT /api/profile` | `{"name": ...}` select the active profile; keeps the current mode and manual valves |
 | `PUT /api/setpoint` | `{"setpoint_f": ...}` between -40 and 300 |
 | `PUT /api/mode` | `{"mode": "auto" \| "manual" \| "off"}` |
-| `PUT /api/valves/{name}` | `{"percent": 0-100}` for `dephlegmator` or `condenser`; manual mode only, otherwise 409 |
-| `PUT /api/pid` | `{"p": ..., "i": ..., "d": ...}` |
+| `PUT /api/valves/{name}` | `{"percent": 0-100}` for `dephlegmator`, `condenser` or `supply`; manual mode only, otherwise 409 |
+| `PUT /api/pid` | `{"p": ..., "i": ..., "d": ...}` for the dephlegmator |
+| `PUT /api/supply/setpoint` | `{"setpoint_f": ...}` for the supply loop |
+| `PUT /api/supply/pid` | `{"p": ..., "i": ..., "d": ...}` for the supply loop |
 
 ## Tests
 
