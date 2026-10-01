@@ -50,13 +50,14 @@ class ControllerState:
         default_factory=lambda: {"dephlegmator": FAILSAFE_PERCENT, "condenser": CONDENSER_PERCENT}
     )
     pid_terms: tuple = (0.0, 0.0, 0.0)
+    pid_gains: tuple = (0.0, 0.0, 0.0)
     fault: Optional[str] = None
 
 
 class Controller:
     """Thread-safety: `tick()` is meant to be called from a single control
     thread. `state()`, `set_setpoint()`, `set_mode()`, `set_profile()` and
-    `set_manual_valve()` may be called from other threads (e.g. the API).
+    `set_manual_valve()` and `set_pid_gains()` may be called from other threads (e.g. the API).
     """
 
     def __init__(
@@ -85,11 +86,17 @@ class Controller:
             self._pid = self._build_pid(profile)
             self._state.profile = name
             self._state.setpoint_f = profile.setpoint_f
+            self._state.pid_gains = self._pid.tunings
 
     def set_setpoint(self, setpoint_f: float) -> None:
         with self._lock:
             self._pid.setpoint = setpoint_f
             self._state.setpoint_f = setpoint_f
+
+    def set_pid_gains(self, p: float, i: float, d: float) -> None:
+        with self._lock:
+            self._pid.tunings = (p, i, d)
+            self._state.pid_gains = (p, i, d)
 
     def set_mode(self, mode: Mode) -> None:
         with self._lock:
@@ -220,6 +227,7 @@ class Controller:
             temps_f=s.temps_f,
             valves_pct=dict(s.valves_pct),
             pid_terms=s.pid_terms,
+            pid_gains=s.pid_gains,
             fault=s.fault,
         )
 

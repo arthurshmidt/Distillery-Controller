@@ -1,0 +1,870 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Still Controller",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/state": {
+      "get": {
+        "summary": "Get State",
+        "operationId": "get_state_api_state_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stream": {
+      "get": {
+        "summary": "Stream",
+        "description": "Server-sent events: the full state, once a second.",
+        "operationId": "stream_api_stream_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history": {
+      "get": {
+        "summary": "Get History",
+        "operationId": "get_history_api_history_get",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "only points after this unix time",
+              "title": "Since"
+            },
+            "description": "only points after this unix time"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "at most this many, newest kept",
+              "title": "Limit"
+            },
+            "description": "at most this many, newest kept"
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HistoryPointModel"
+                  },
+                  "title": "Response Get History Api History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles": {
+      "get": {
+        "summary": "Get Profiles",
+        "operationId": "get_profiles_api_profiles_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilesModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profile": {
+      "put": {
+        "summary": "Put Profile",
+        "operationId": "put_profile_api_profile_put",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/setpoint": {
+      "put": {
+        "summary": "Put Setpoint",
+        "operationId": "put_setpoint_api_setpoint_put",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetpointRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mode": {
+      "put": {
+        "summary": "Put Mode",
+        "operationId": "put_mode_api_mode_put",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/valves/{name}": {
+      "put": {
+        "summary": "Put Valve",
+        "operationId": "put_valve_api_valves__name__put",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pid": {
+      "put": {
+        "summary": "Put Pid",
+        "operationId": "put_pid_api_pid_put",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PidRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HistoryPointModel": {
+        "properties": {
+          "timestamp": {
+            "type": "number",
+            "title": "Timestamp",
+            "description": "unix time, seconds"
+          },
+          "state": {
+            "$ref": "#/components/schemas/StateModel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "state"
+        ],
+        "title": "HistoryPointModel"
+      },
+      "Mode": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "manual",
+          "off"
+        ],
+        "title": "Mode"
+      },
+      "ModeRequest": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "ModeRequest"
+      },
+      "PidGainsModel": {
+        "properties": {
+          "p": {
+            "type": "number",
+            "title": "P"
+          },
+          "i": {
+            "type": "number",
+            "title": "I"
+          },
+          "d": {
+            "type": "number",
+            "title": "D"
+          }
+        },
+        "type": "object",
+        "required": [
+          "p",
+          "i",
+          "d"
+        ],
+        "title": "PidGainsModel"
+      },
+      "PidRequest": {
+        "properties": {
+          "p": {
+            "type": "number",
+            "title": "P"
+          },
+          "i": {
+            "type": "number",
+            "title": "I"
+          },
+          "d": {
+            "type": "number",
+            "title": "D"
+          }
+        },
+        "type": "object",
+        "required": [
+          "p",
+          "i",
+          "d"
+        ],
+        "title": "PidRequest"
+      },
+      "PidTermsModel": {
+        "properties": {
+          "p": {
+            "type": "number",
+            "title": "P"
+          },
+          "i": {
+            "type": "number",
+            "title": "I"
+          },
+          "d": {
+            "type": "number",
+            "title": "D"
+          }
+        },
+        "type": "object",
+        "required": [
+          "p",
+          "i",
+          "d"
+        ],
+        "title": "PidTermsModel"
+      },
+      "ProfileModel": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "setpoint_f": {
+            "type": "number",
+            "title": "Setpoint F"
+          },
+          "pid": {
+            "$ref": "#/components/schemas/PidGainsModel"
+          },
+          "output_limits": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Output Limits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "setpoint_f",
+          "pid",
+          "output_limits"
+        ],
+        "title": "ProfileModel"
+      },
+      "ProfileRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "ProfileRequest"
+      },
+      "ProfilesModel": {
+        "properties": {
+          "active": {
+            "type": "string",
+            "title": "Active"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileModel"
+            },
+            "type": "array",
+            "title": "Profiles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "active",
+          "profiles"
+        ],
+        "title": "ProfilesModel"
+      },
+      "SetpointRequest": {
+        "properties": {
+          "setpoint_f": {
+            "type": "number",
+            "maximum": 300.0,
+            "minimum": -40.0,
+            "title": "Setpoint F"
+          }
+        },
+        "type": "object",
+        "required": [
+          "setpoint_f"
+        ],
+        "title": "SetpointRequest"
+      },
+      "StateModel": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "profile": {
+            "type": "string",
+            "title": "Profile"
+          },
+          "setpoint_f": {
+            "type": "number",
+            "title": "Setpoint F"
+          },
+          "temps_f": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemperaturesModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null until the first reading"
+          },
+          "valves_pct": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Valves Pct"
+          },
+          "pid_terms": {
+            "$ref": "#/components/schemas/PidTermsModel"
+          },
+          "pid_gains": {
+            "$ref": "#/components/schemas/PidGainsModel"
+          },
+          "fault": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault",
+            "description": "reason the failsafe is active, else null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "profile",
+          "setpoint_f",
+          "valves_pct",
+          "pid_terms",
+          "pid_gains"
+        ],
+        "title": "StateModel"
+      },
+      "TemperaturesModel": {
+        "properties": {
+          "deph_supply": {
+            "type": "number",
+            "title": "Deph Supply"
+          },
+          "deph_return": {
+            "type": "number",
+            "title": "Deph Return"
+          },
+          "cond_supply": {
+            "type": "number",
+            "title": "Cond Supply"
+          },
+          "cond_return": {
+            "type": "number",
+            "title": "Cond Return"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deph_supply",
+          "deph_return",
+          "cond_supply",
+          "cond_return"
+        ],
+        "title": "TemperaturesModel"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "ValveRequest": {
+        "properties": {
+          "percent": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Percent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "percent"
+        ],
+        "title": "ValveRequest"
+      }
+    }
+  }
+}
