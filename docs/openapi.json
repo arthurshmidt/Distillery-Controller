@@ -124,16 +124,11 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
+              "type": "integer",
+              "maximum": 100000,
+              "minimum": 0,
               "description": "at most this many, newest kept",
+              "default": 7200,
               "title": "Limit"
             },
             "description": "at most this many, newest kept"

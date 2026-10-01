@@ -20,7 +20,8 @@ from pydantic import BaseModel, Field
 from .controller import Controller, ControllerState, Mode
 from .config import AppConfig
 from .hardware.base import VALVE_NAMES
-from .runner import ControlLoop, HistoryPoint
+from .runner import ControlLoop
+from .store import HistoryPoint
 
 STREAM_INTERVAL_S = 1.0
 
@@ -152,7 +153,7 @@ def create_app(
     @api.get("/history", response_model=List[HistoryPointModel])
     def get_history(
         since: Optional[float] = Query(None, description="only points after this unix time"),
-        limit: Optional[int] = Query(None, ge=0, description="at most this many, newest kept"),
+        limit: int = Query(7200, ge=0, le=100000, description="at most this many, newest kept"),
     ) -> List[HistoryPointModel]:
         return [history_model(p) for p in loop.history(since=since, limit=limit)]
 

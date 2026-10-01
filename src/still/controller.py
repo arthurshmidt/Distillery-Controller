@@ -17,12 +17,15 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from threading import Lock
-from typing import Callable, Dict, Optional
+from typing import TYPE_CHECKING, Callable, Dict, Optional
 
 from simple_pid import PID
 
 from .config import AppConfig, ProfileConfig
 from .hardware.base import HardwareInterface, Temperatures
+
+if TYPE_CHECKING:
+    from .store import Store
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +69,30 @@ class Controller:
         config: AppConfig,
         profile_name: Optional[str] = None,
         pid_time_fn: Optional[Callable[[], float]] = None,
+        store: Optional["Store"] = None,
     ):
+        """With a `store`, the active profile and each profile's setpoint and
+        gains are saved on change and restored here. An explicit `profile_name`
+        wins over the saved one. The mode is never restored: the controller
+        always starts in auto."""
         self._hw = hw
         self._config = config
         self._pid_time_fn = pid_time_fn
+        self._store = store
+        self._overrides: Dict[str, dict] = {}
+        saved_profile = None
+        if store is not None:
+            saved = store.get_setting("overrides", {})
+            if isinstance(saved, dict):
+                self._overrides = {k: v for k, v in saved.items() if k in config.profiles and isinstance(v, dict)}
+            saved_profile = store.get_setting("active_profile")
+            if saved_profile not in config.profiles:
+                saved_profile = None
         self._lock = Lock()
         self._pid: Optional[PID] = None
         self._manual_valves: Dict[str, float] = {}
         self._state = ControllerState()
-        self.set_profile(profile_name or config.default_profile)
+        self.set_profile(profile_name or saved_profile or config.default_profile)
         self.set_mode(Mode.AUTO)
         self.failsafe("startup", is_fault=False)
 
@@ -83,20 +101,27 @@ class Controller:
     def set_profile(self, name: str) -> None:
         profile = self._config.profiles[name]
         with self._lock:
-            self._pid = self._build_pid(profile)
+            self._pid = self._build_pid(profile, self._overrides.get(name, {}))
             self._state.profile = name
-            self._state.setpoint_f = profile.setpoint_f
+            self._state.setpoint_f = self._pid.setpoint
             self._state.pid_gains = self._pid.tunings
+        self._save("active_profile", name)
 
     def set_setpoint(self, setpoint_f: float) -> None:
         with self._lock:
             self._pid.setpoint = setpoint_f
             self._state.setpoint_f = setpoint_f
+            self._overrides.setdefault(self._state.profile, {})["setpoint_f"] = setpoint_f
+            overrides = self._snapshot_overrides()
+        self._save("overrides", overrides)
 
     def set_pid_gains(self, p: float, i: float, d: float) -> None:
         with self._lock:
             self._pid.tunings = (p, i, d)
             self._state.pid_gains = (p, i, d)
+            self._overrides.setdefault(self._state.profile, {})["pid"] = [p, i, d]
+            overrides = self._snapshot_overrides()
+        self._save("overrides", overrides)
 
     def set_mode(self, mode: Mode) -> None:
         with self._lock:
@@ -183,12 +208,27 @@ class Controller:
 
     # -- helpers -------------------------------------------------------------
 
-    def _build_pid(self, profile: ProfileConfig) -> PID:
+    def _snapshot_overrides(self) -> Dict[str, dict]:
+        return {k: dict(v) for k, v in self._overrides.items()}
+
+    def _save(self, key: str, value) -> None:
+        """Persist a setting. A storage failure must not stop the controller
+        from taking the change, so it is logged rather than raised."""
+        if self._store is None:
+            return
+        try:
+            self._store.set_setting(key, value)
+        except Exception:
+            logger.exception("could not save setting %r", key)
+
+    def _build_pid(self, profile: ProfileConfig, override: Optional[dict] = None) -> PID:
+        override = override or {}
+        p, i, d = override.get("pid") or (profile.pid.p, profile.pid.i, profile.pid.d)
         pid = PID(
-            profile.pid.p,
-            profile.pid.i,
-            profile.pid.d,
-            setpoint=profile.setpoint_f,
+            p,
+            i,
+            d,
+            setpoint=override.get("setpoint_f", profile.setpoint_f),
             time_fn=self._pid_time_fn,
         )
         pid.sample_time = profile.sample_time

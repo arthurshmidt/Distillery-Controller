@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 *.egg-info/
+*.db
+*.db-wal
+*.db-shm

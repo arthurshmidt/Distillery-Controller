@@ -14,6 +14,7 @@ from .config import load_config
 from .controller import Controller
 from .hardware import SimulatedHW, WidgetlordsHW
 from .runner import ControlLoop
+from .store import Store
 
 
 def main(argv=None) -> int:
@@ -22,6 +23,7 @@ def main(argv=None) -> int:
     parser.add_argument("--host", default="127.0.0.1", help="bind address (use the LAN address to expose it)")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--simulate", action="store_true", help="use SimulatedHW instead of the boards")
+    parser.add_argument("--db", default="still.db", help="SQLite file for history and saved settings")
     parser.add_argument("--interval", type=float, default=1.0, help="control loop period, seconds")
     args = parser.parse_args(argv)
 
@@ -34,8 +36,9 @@ def main(argv=None) -> int:
 
     config = load_config(args.config)
     hw = SimulatedHW() if args.simulate else WidgetlordsHW(config)
-    controller = Controller(hw, config)
-    loop = ControlLoop(controller, interval_s=args.interval)
+    store = Store(args.db)
+    controller = Controller(hw, config, store=store)
+    loop = ControlLoop(controller, interval_s=args.interval, store=store)
     app = create_app(controller, loop, config, token)
 
     loop.start()
@@ -44,6 +47,7 @@ def main(argv=None) -> int:
     finally:
         loop.stop()
         hw.close()
+        store.close()
     return 0
 
 
