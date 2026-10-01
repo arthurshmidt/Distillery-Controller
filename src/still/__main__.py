@@ -1,0 +1,62 @@
+"""Run the daemon: `still --config config/still.yaml` (or `python -m still`)."""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import sys
+
+import uvicorn
+
+from .api import create_app
+from .config import load_config
+from .controller import Controller
+from .hardware import SimulatedHW, WidgetlordsHW
+from .runner import ControlLoop
+from .store import Store
+
+logger = logging.getLogger(__name__)
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(prog="still", description=__doc__)
+    parser.add_argument("--config", default="config/still.yaml")
+    parser.add_argument("--host", default="127.0.0.1", help="bind address (use the LAN address to expose it)")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--simulate", action="store_true", help="use SimulatedHW instead of the boards")
+    parser.add_argument("--db", default="still.db", help="SQLite file for history and saved settings")
+    parser.add_argument("--interval", type=float, default=1.0, help="control loop period, seconds")
+    args = parser.parse_args(argv)
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+    token = os.environ.get("STILL_TOKEN")
+    if not token:
+        print("STILL_TOKEN must be set to the API token", file=sys.stderr)
+        return 2
+
+    config = load_config(args.config)
+    hw = SimulatedHW() if args.simulate else WidgetlordsHW(config)
+    store = Store(args.db)
+    controller = Controller(hw, config, store=store)
+    loop = ControlLoop(controller, interval_s=args.interval, store=store)
+    app = create_app(controller, loop, config, token)
+
+    loop.start()
+    try:
+        uvicorn.run(app, host=args.host, port=args.port)
+    finally:
+        # uvicorn turns SIGTERM/SIGINT into a normal return, so systemd stop
+        # lands here. Each step is guarded so a failure in one cannot skip the rest.
+        logger.info("shutting down, opening valves")
+        for step in (loop.stop, hw.close, store.close):
+            try:
+                step()
+            except Exception:
+                logger.exception("shutdown step %s failed", getattr(step, "__qualname__", step))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
