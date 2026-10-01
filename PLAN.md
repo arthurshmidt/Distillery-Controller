@@ -4,9 +4,9 @@
 A Python daemon that controls the still (dephlegmator and condenser) on the Raspberry Pi, based on the code in `original/`, with a web GUI reachable on the local network. The GUI is built separately with Claude Design against the daemon's API contract.
 
 ## Decisions
-- **Scope:** the daemon controls the dephlegmator with a PID loop and the condenser valve too, but for now the condenser is **held 100% open** (no condenser PID). The supply valve (`supply.py`) is out of scope for now.
+- **Scope:** the daemon controls the supply (city water) valve with a PID loop on the bath outlet temperature (`deph_supply`, from `supply.py`), the dephlegmator with a PID loop on its return temperature, and the condenser valve too, but for now the condenser is **held 100% open** (no condenser PID).
 - **Profiles:** selected from the UI (whiskey, gin, ...), replacing the duplicated `whiskey_distillation.py` / `gin_distillation.py`.
-- **Failsafe:** same as the original scripts' initial position: both valves fully open (4000 DA = 100%). Applied on startup, shutdown, crash, sensor fault, and in `manual`/`off` modes.
+- **Failsafe:** the dephlegmator and condenser valves fully open (4000 DA = 100%), as in the original scripts' initial position. Applied on startup, shutdown, crash, sensor fault, and in `off` mode. The supply valve is not moved by it: it holds its last position, and is not commanded until the first auto tick.
 - **Access:** LAN only. Bind to the local interface and require a simple token or password, since the API can move valves.
 - **Packaging:** normal Python package (`src/still/`, `pyproject.toml`).
 
@@ -43,7 +43,7 @@ web GUI ──HTTP/SSE──> FastAPI ──> Controller (state snapshot + comma
 ## Carried over from `original/`
 - Steinhart-Hart conversion `steinhart_hart(10000, 3380, 4095, x)`, calibration factor 3.0, C to F.
 - Percent to DA: `800 + 32 * percent` (800 = 4 mA, 4000 = 20 mA).
-- Channels: AI 0 = deph return, 1 = cond return, 2 = deph supply, 3 = cond supply. AO 0 = deph valve, 1 = cond valve.
+- Channels: AI 0 = deph return, 1 = cond return, 2 = deph supply, 3 = cond supply. AO 0 = deph valve, 1 = cond valve, 2 = supply valve.
 - PID defaults (`simple_pid`):
   - Dephlegmator: input = return temp, P=-1, I=-0.01, D=0, limits 30-100 (whiskey) / 40-100 (gin), 1 s sample.
   - Condenser: held at 100% open for now. The originals' condenser PID (P=1, I=0.1, D=0.05, limits 0-100, 5 s sample, setpoint 150 F) was commented out and never run; it is not used, and no condenser gains or setpoint are exposed until control is needed.
@@ -64,5 +64,5 @@ Status: phases 1, 2, 4, 5 and 6 are done. Phase 3 needs the Pi.
 Every change is made on a branch created from `development` and merged back when the user approves; nothing is committed directly to `development` or `master` (also in `CLAUDE.md`).
 
 ## Open items
-- Whether the supply valve joins the daemon later.
+- The supply valve has no commanded startup position (the original homed it closed). Decide on the Pi whether it needs one.
 - If condenser control is wanted later, its gains and setpoint will need tuning on the real still.

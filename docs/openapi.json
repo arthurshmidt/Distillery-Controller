@@ -512,6 +512,118 @@
           }
         }
       }
+    },
+    "/api/supply/setpoint": {
+      "put": {
+        "summary": "Put Supply Setpoint",
+        "operationId": "put_supply_setpoint_api_supply_setpoint_put",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetpointRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supply/pid": {
+      "put": {
+        "summary": "Put Supply Pid",
+        "operationId": "put_supply_pid_api_supply_pid_put",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PidRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -745,12 +857,24 @@
               "type": "number"
             },
             "type": "object",
-            "title": "Valves Pct"
+            "title": "Valves Pct",
+            "description": "dephlegmator, condenser and supply; supply is absent until it is first commanded"
           },
           "pid_terms": {
             "$ref": "#/components/schemas/PidTermsModel"
           },
           "pid_gains": {
+            "$ref": "#/components/schemas/PidGainsModel"
+          },
+          "supply_setpoint_f": {
+            "type": "number",
+            "title": "Supply Setpoint F",
+            "description": "supply (city water) valve loop setpoint"
+          },
+          "supply_pid_terms": {
+            "$ref": "#/components/schemas/PidTermsModel"
+          },
+          "supply_pid_gains": {
             "$ref": "#/components/schemas/PidGainsModel"
           },
           "fault": {
@@ -773,7 +897,10 @@
           "setpoint_f",
           "valves_pct",
           "pid_terms",
-          "pid_gains"
+          "pid_gains",
+          "supply_setpoint_f",
+          "supply_pid_terms",
+          "supply_pid_gains"
         ],
         "title": "StateModel"
       },

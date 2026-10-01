@@ -15,6 +15,9 @@ def test_load_shipped_config():
     assert config.channels.ao["dephlegmator"] == 0
     assert config.profiles["whiskey"].output_limits == (30, 100)
     assert config.profiles["gin"].output_limits == (40, 100)
+    assert config.channels.ao["supply"] == 2
+    assert config.supply.setpoint_f == 90
+    assert config.supply.output_limits == (0, 60)
 
 
 def test_missing_default_profile_is_rejected(tmp_path):
@@ -24,7 +27,11 @@ def test_missing_default_profile_is_rejected(tmp_path):
 thermistor: {r_fixed: 10000, beta: 3380, adc_max: 4095, calibration_factor: 3.0}
 channels:
   ai: {deph_return: 0, deph_supply: 2, cond_return: 1, cond_supply: 3}
-  ao: {dephlegmator: 0, condenser: 1}
+  ao: {dephlegmator: 0, condenser: 1, supply: 2}
+supply:
+  setpoint_f: 90
+  pid: {p: -1.0, i: -0.01, d: 0.0}
+  output_limits: [0, 60]
 default_profile: missing
 profiles:
   whiskey:
@@ -33,5 +40,13 @@ profiles:
     output_limits: [30, 100]
 """
     )
+    with pytest.raises(ValueError):
+        load_config(bad)
+
+
+def test_missing_supply_channel_is_rejected(tmp_path):
+    text = (CONFIG_PATH.read_text()).replace("    supply: 2\n", "")
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(text)
     with pytest.raises(ValueError):
         load_config(bad)

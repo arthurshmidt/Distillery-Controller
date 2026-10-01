@@ -207,3 +207,53 @@ def test_valve_write_error_in_auto_triggers_failsafe(monkeypatch):
     state = controller.tick()
     assert "write error" in state.fault
     assert state.valves_pct["dephlegmator"] == FAILSAFE_PERCENT
+
+
+def test_supply_loop_holds_bath_at_setpoint():
+    controller, hw, config = make_controller()
+    state = None
+    for _ in range(600):
+        state = controller.tick()
+    assert abs(state.temps_f.deph_supply - config.supply.setpoint_f) < 3
+    lo, hi = config.supply.output_limits
+    assert lo <= state.valves_pct["supply"] <= hi
+
+
+def test_supply_valve_not_commanded_until_first_auto_tick():
+    controller, hw, _ = make_controller()
+    assert "supply" not in controller.state().valves_pct
+    assert controller.tick().valves_pct["supply"] is not None
+
+
+def test_failsafe_holds_supply_valve(monkeypatch):
+    controller, hw, _ = make_controller()
+    for _ in range(20):
+        state = controller.tick()
+    held = state.valves_pct["supply"]
+    written = []
+    real_write = hw.write_valve
+    monkeypatch.setattr(hw, "write_valve", lambda n, p: written.append(n) or real_write(n, p))
+
+    controller.set_mode(Mode.OFF)
+    state = controller.tick()
+    assert state.valves_pct["supply"] == held
+    assert state.valves_pct["dephlegmator"] == FAILSAFE_PERCENT
+    assert "supply" not in written
+
+
+def test_supply_setpoint_and_gains_are_applied():
+    controller, hw, _ = make_controller()
+    controller.set_supply_setpoint(80.0)
+    controller.set_supply_pid_gains(-2.0, -0.5, 0.1)
+    s = controller.state()
+    assert s.supply_setpoint_f == 80.0
+    assert s.supply_pid_gains == (-2.0, -0.5, 0.1)
+
+
+def test_manual_supply_valve():
+    controller, hw, _ = make_controller()
+    controller.set_mode(Mode.MANUAL)
+    controller.set_manual_valve("supply", 33)
+    assert controller.tick().valves_pct["supply"] == 33
+    controller.set_mode(Mode.AUTO)
+    assert controller.tick().valves_pct["supply"] != 33

@@ -13,16 +13,16 @@ A checklist for building the web GUI (phase 7 of `PLAN.md`). The OpenAPI spec on
 
 - **Who and where:** one operator on a phone or tablet near the still, over the LAN. Large touch targets, readable at a distance, and a dark theme if used in a dim room.
 - **Screens or panels:**
-  - Live temperatures: dephlegmator and condenser, supply and return.
-  - Setpoint with a +/- control.
-  - Mode switch (`auto`, `manual`, `off`) and manual valve sliders (`dephlegmator`, `condenser`).
+  - Live temperatures: dephlegmator and condenser, supply and return. The supply temperature is the water bath outlet and is shared by both stages.
+  - Setpoint with a +/- control, for the dephlegmator and separately for the supply (city water) loop (`/api/supply/setpoint`).
+  - Mode switch (`auto`, `manual`, `off`) and manual valve sliders (`dephlegmator`, `condenser`, `supply`).
   - Profile selector (whiskey or gin).
-  - PID gains, in an advanced section.
+  - PID gains for the dephlegmator and the supply loop, in an advanced section.
   - History chart from `/api/history`.
   - A failsafe or fault banner that can't be missed (the `fault` field of the state).
 - **Safety behavior:**
   - Confirm before switching to `off` or `manual`.
-  - Show clearly when the valves are in failsafe (fully open).
+  - Show clearly when the valves are in failsafe (dephlegmator and condenser fully open; the supply valve holds its last position, and `valves_pct.supply` is absent until it is first commanded).
   - Valve sliders only work in manual mode (the API returns 409 otherwise), so disable them in other modes.
 - **Connection handling:** show a clear state when the SSE stream drops. The token comes from a login field stored in `localStorage`.
 

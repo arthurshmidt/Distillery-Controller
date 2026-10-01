@@ -18,8 +18,21 @@ channels:
   ao:
     dephlegmator: 0
     condenser: 1
+    supply: 2
 
 default_profile: whiskey
+
+# City water supply valve (original/supply.py). It holds the water bath outlet
+# temperature (deph_supply), the inlet temperature of the dephlegmator and
+# condenser. Shared by all profiles. Output is capped at 60%.
+supply:
+  setpoint_f: 90
+  pid:
+    p: -1.0
+    i: -0.01
+    d: 0.0
+  output_limits: [0, 60]
+  sample_time: 1.0
 
 # The condenser valve is held fully open for now (see PLAN.md); only the
 # dephlegmator is under PID control. Each profile's setpoint comes from the

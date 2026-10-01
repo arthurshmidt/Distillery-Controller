@@ -10,7 +10,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-VALVE_NAMES = ("dephlegmator", "condenser")
+VALVE_NAMES = ("dephlegmator", "condenser", "supply")
 
 
 @dataclass(frozen=True)

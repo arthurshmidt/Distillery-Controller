@@ -1,14 +1,22 @@
-"""The dephlegmator PID control loop.
+"""The still's control loops: dephlegmator, condenser and supply.
 
 Each call to `Controller.tick()` is one iteration of what the original
 scripts (original/whiskey_distillation.py, original/gin_distillation.py) did
 in their `while True:` loop: read temperatures, run the PID, command the
 valves, and record state for the API to read.
 
+City water feeds the supply valve into the water bath, which also receives
+the warm return water. The supply PID (original/supply.py) holds the bath
+outlet temperature (`deph_supply`), which is the inlet temperature of both the
+dephlegmator and the condenser; the dephlegmator PID then holds its return
+temperature.
+
 The condenser is held fully open (CONDENSER_PERCENT) rather than run under
-its own PID -- see PLAN.md. FAILSAFE_PERCENT (both valves fully open) matches
-the position the original scripts commanded at startup, and is used here for
-startup, shutdown, manual/off modes, and sensor faults.
+its own PID -- see PLAN.md. FAILSAFE_PERCENT (dephlegmator and condenser fully
+open) matches the position the original scripts commanded at startup, and is
+used here for startup, shutdown, manual/off modes, and sensor faults. The
+supply valve is deliberately not moved by the failsafe: it holds its last
+position.
 """
 
 from __future__ import annotations
@@ -54,13 +62,17 @@ class ControllerState:
     )
     pid_terms: tuple = (0.0, 0.0, 0.0)
     pid_gains: tuple = (0.0, 0.0, 0.0)
+    supply_setpoint_f: float = 0.0
+    supply_pid_terms: tuple = (0.0, 0.0, 0.0)
+    supply_pid_gains: tuple = (0.0, 0.0, 0.0)
     fault: Optional[str] = None
 
 
 class Controller:
     """Thread-safety: `tick()` is meant to be called from a single control
     thread. `state()`, `set_setpoint()`, `set_mode()`, `set_profile()` and
-    `set_manual_valve()` and `set_pid_gains()` may be called from other threads (e.g. the API).
+    `set_manual_valve()`, `set_pid_gains()`, `set_supply_setpoint()` and
+    `set_supply_pid_gains()` may be called from other threads (e.g. the API).
     """
 
     def __init__(
@@ -71,8 +83,9 @@ class Controller:
         pid_time_fn: Optional[Callable[[], float]] = None,
         store: Optional["Store"] = None,
     ):
-        """With a `store`, the active profile and each profile's setpoint and
-        gains are saved on change and restored here. An explicit `profile_name`
+        """With a `store`, the active profile, each profile's setpoint and
+        gains, and the supply setpoint and gains are saved on change and
+        restored here. An explicit `profile_name`
         wins over the saved one. The mode is never restored: the controller
         always starts in auto."""
         self._hw = hw
@@ -80,8 +93,12 @@ class Controller:
         self._pid_time_fn = pid_time_fn
         self._store = store
         self._overrides: Dict[str, dict] = {}
+        self._supply_override: dict = {}
         saved_profile = None
         if store is not None:
+            saved_supply = store.get_setting("supply_override", {})
+            if isinstance(saved_supply, dict):
+                self._supply_override = saved_supply
             saved = store.get_setting("overrides", {})
             if isinstance(saved, dict):
                 self._overrides = {k: v for k, v in saved.items() if k in config.profiles and isinstance(v, dict)}
@@ -90,8 +107,12 @@ class Controller:
                 saved_profile = None
         self._lock = Lock()
         self._pid: Optional[PID] = None
+        self._supply_pid: PID = self._build_supply_pid()
+        self._supply_last: Optional[float] = None  # last supply position written
         self._manual_valves: Dict[str, float] = {}
-        self._state = ControllerState()
+        self._state = ControllerState(
+            supply_setpoint_f=self._supply_pid.setpoint, supply_pid_gains=self._supply_pid.tunings
+        )
         self.set_profile(profile_name or saved_profile or config.default_profile)
         self.set_mode(Mode.AUTO)
         self.failsafe("startup", is_fault=False)
@@ -122,6 +143,22 @@ class Controller:
             self._overrides.setdefault(self._state.profile, {})["pid"] = [p, i, d]
             overrides = self._snapshot_overrides()
         self._save("overrides", overrides)
+
+    def set_supply_setpoint(self, setpoint_f: float) -> None:
+        with self._lock:
+            self._supply_pid.setpoint = setpoint_f
+            self._state.supply_setpoint_f = setpoint_f
+            self._supply_override["setpoint_f"] = setpoint_f
+            override = dict(self._supply_override)
+        self._save("supply_override", override)
+
+    def set_supply_pid_gains(self, p: float, i: float, d: float) -> None:
+        with self._lock:
+            self._supply_pid.tunings = (p, i, d)
+            self._state.supply_pid_gains = (p, i, d)
+            self._supply_override["pid"] = [p, i, d]
+            override = dict(self._supply_override)
+        self._save("supply_override", override)
 
     def set_mode(self, mode: Mode) -> None:
         with self._lock:
@@ -172,8 +209,9 @@ class Controller:
         is_fault: bool = True,
         temps: Optional[Temperatures] = None,
     ) -> ControllerState:
-        """Open both valves fully. Each valve is attempted independently, so
-        one failing write does not stop the other from being commanded."""
+        """Open the dephlegmator and condenser valves fully; the supply valve
+        holds its last position. Each valve is attempted independently, so one
+        failing write does not stop the other from being commanded."""
         if is_fault:
             logger.warning("failsafe: %s", reason)
         valves = {"dephlegmator": FAILSAFE_PERCENT, "condenser": FAILSAFE_PERCENT}
@@ -193,9 +231,15 @@ class Controller:
         with self._lock:
             deph_pct = self._pid(temps.deph_return)
             p, i, d = self._pid.components
-        valves = {"dephlegmator": deph_pct, "condenser": self._condenser_percent(temps)}
+            supply_pct = self._supply_pid(temps.deph_supply)
+            supply_terms = self._supply_pid.components
+        valves = {
+            "dephlegmator": deph_pct,
+            "condenser": self._condenser_percent(temps),
+            "supply": supply_pct,
+        }
         self._write_valves(valves)
-        return self._record(temps, valves, (p, i, d), fault=None)
+        return self._record(temps, valves, (p, i, d), fault=None, supply_terms=supply_terms)
 
     def _apply_manual(self, temps: Temperatures) -> ControllerState:
         with self._lock:
@@ -203,6 +247,8 @@ class Controller:
                 "dephlegmator": self._manual_valves.get("dephlegmator", FAILSAFE_PERCENT),
                 "condenser": self._manual_valves.get("condenser", self._condenser_percent(temps)),
             }
+            if "supply" in self._manual_valves:
+                valves["supply"] = self._manual_valves["supply"]
         self._write_valves(valves)
         return self._record(temps, valves, (0.0, 0.0, 0.0), fault=None)
 
@@ -235,6 +281,21 @@ class Controller:
         pid.output_limits = tuple(profile.output_limits)
         return pid
 
+    def _build_supply_pid(self) -> PID:
+        cfg = self._config.supply
+        override = self._supply_override
+        p, i, d = override.get("pid") or (cfg.pid.p, cfg.pid.i, cfg.pid.d)
+        pid = PID(
+            p,
+            i,
+            d,
+            setpoint=override.get("setpoint_f", cfg.setpoint_f),
+            time_fn=self._pid_time_fn,
+        )
+        pid.sample_time = cfg.sample_time
+        pid.output_limits = tuple(cfg.output_limits)
+        return pid
+
     def _condenser_percent(self, temps: Temperatures) -> float:
         """Condenser valve position in auto mode. Held fully open for now; a
         condenser PID would replace this body (see PLAN.md)."""
@@ -243,6 +304,8 @@ class Controller:
     def _write_valves(self, valves: Dict[str, float]) -> None:
         for name, percent in valves.items():
             self._hw.write_valve(name, percent)
+            if name == "supply":
+                self._supply_last = percent
 
     def _record(
         self,
@@ -250,11 +313,15 @@ class Controller:
         valves: Dict[str, float],
         pid_terms: tuple,
         fault: Optional[str],
+        supply_terms: tuple = (0.0, 0.0, 0.0),
     ) -> ControllerState:
         with self._lock:
             self._state.temps_f = temps
             self._state.valves_pct = dict(valves)
+            if self._supply_last is not None:
+                self._state.valves_pct["supply"] = self._supply_last
             self._state.pid_terms = pid_terms
+            self._state.supply_pid_terms = supply_terms
             self._state.fault = fault
             return self._copy_state()
 
@@ -268,6 +335,9 @@ class Controller:
             valves_pct=dict(s.valves_pct),
             pid_terms=s.pid_terms,
             pid_gains=s.pid_gains,
+            supply_setpoint_f=s.supply_setpoint_f,
+            supply_pid_terms=s.supply_pid_terms,
+            supply_pid_gains=s.supply_pid_gains,
             fault=s.fault,
         )
 

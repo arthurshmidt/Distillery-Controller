@@ -102,3 +102,49 @@ def test_storage_failure_does_not_block_a_change(config):
     store.close()
     c.set_setpoint(140.0)
     assert c.state().setpoint_f == 140.0
+
+
+def test_controller_restores_supply_setpoint_and_gains(config, tmp_path):
+    path = str(tmp_path / "s.db")
+    c = Controller(SimulatedHW(seed=1), config, store=Store(path))
+    c.set_supply_setpoint(84.0)
+    c.set_supply_pid_gains(-3.0, -0.2, 0.0)
+    c2 = Controller(SimulatedHW(seed=1), config, store=Store(path))
+    assert c2.state().supply_setpoint_f == 84.0
+    assert c2.state().supply_pid_gains == (-3.0, -0.2, 0.0)
+
+
+def test_history_round_trips_supply_fields():
+    store = Store()
+    store.add_history(
+        1.0,
+        _state(valves_pct={"dephlegmator": 1.0, "condenser": 2.0, "supply": 3.0},
+               supply_setpoint_f=90.0, supply_pid_terms=(1.0, 2.0, 3.0), supply_pid_gains=(-1.0, -0.01, 0.0)),
+    )
+    s = store.history()[0].state
+    assert s.valves_pct["supply"] == 3.0
+    assert s.supply_setpoint_f == 90.0
+    assert s.supply_pid_terms == (1.0, 2.0, 3.0)
+
+
+def test_old_database_gets_supply_columns(tmp_path):
+    import sqlite3
+
+    path = str(tmp_path / "old.db")
+    db = sqlite3.connect(path)
+    db.execute(
+        "CREATE TABLE history (ts REAL NOT NULL, mode TEXT NOT NULL, profile TEXT NOT NULL, "
+        "setpoint_f REAL NOT NULL, deph_supply REAL, deph_return REAL, cond_supply REAL, cond_return REAL, "
+        "valve_deph REAL NOT NULL, valve_cond REAL NOT NULL, term_p REAL NOT NULL, term_i REAL NOT NULL, "
+        "term_d REAL NOT NULL, gain_p REAL NOT NULL, gain_i REAL NOT NULL, gain_d REAL NOT NULL, fault TEXT)"
+    )
+    db.execute(
+        "INSERT INTO history VALUES (?,'auto','whiskey',130,1,2,3,4,50,100,0,0,0,-1,-0.01,0,NULL)",
+        (time.time(),),
+    )
+    db.commit()
+    db.close()
+    store = Store(path)
+    assert "supply" not in store.history()[0].state.valves_pct
+    store.add_history(time.time() + 1, _state())
+    assert len(store.history()) == 2

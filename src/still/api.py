@@ -53,9 +53,14 @@ class StateModel(BaseModel):
     profile: str
     setpoint_f: float
     temps_f: Optional[TemperaturesModel] = Field(None, description="null until the first reading")
-    valves_pct: Dict[str, float]
+    valves_pct: Dict[str, float] = Field(
+        description="dephlegmator, condenser and supply; supply is absent until it is first commanded"
+    )
     pid_terms: PidTermsModel
     pid_gains: PidGainsModel
+    supply_setpoint_f: float = Field(description="supply (city water) valve loop setpoint")
+    supply_pid_terms: PidTermsModel
+    supply_pid_gains: PidGainsModel
     fault: Optional[str] = Field(None, description="reason the failsafe is active, else null")
 
 
@@ -105,6 +110,13 @@ def state_model(s: ControllerState) -> StateModel:
         valves_pct=s.valves_pct,
         pid_terms=PidTermsModel(p=s.pid_terms[0], i=s.pid_terms[1], d=s.pid_terms[2]),
         pid_gains=PidGainsModel(p=s.pid_gains[0], i=s.pid_gains[1], d=s.pid_gains[2]),
+        supply_setpoint_f=s.supply_setpoint_f,
+        supply_pid_terms=PidTermsModel(
+            p=s.supply_pid_terms[0], i=s.supply_pid_terms[1], d=s.supply_pid_terms[2]
+        ),
+        supply_pid_gains=PidGainsModel(
+            p=s.supply_pid_gains[0], i=s.supply_pid_gains[1], d=s.supply_pid_gains[2]
+        ),
         fault=s.fault,
     )
 
@@ -202,6 +214,16 @@ def create_app(
     @api.put("/pid", response_model=StateModel)
     def put_pid(body: PidRequest) -> StateModel:
         controller.set_pid_gains(body.p, body.i, body.d)
+        return state_model(controller.state())
+
+    @api.put("/supply/setpoint", response_model=StateModel)
+    def put_supply_setpoint(body: SetpointRequest) -> StateModel:
+        controller.set_supply_setpoint(body.setpoint_f)
+        return state_model(controller.state())
+
+    @api.put("/supply/pid", response_model=StateModel)
+    def put_supply_pid(body: PidRequest) -> StateModel:
+        controller.set_supply_pid_gains(body.p, body.i, body.d)
         return state_model(controller.state())
 
     app.include_router(api)
