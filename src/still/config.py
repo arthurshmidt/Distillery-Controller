@@ -8,6 +8,9 @@ from typing import Dict, Tuple
 
 import yaml
 
+# Kept here rather than imported from hardware.base, which would be circular.
+REQUIRED_VALVES = ("dephlegmator", "condenser", "supply")
+
 
 @dataclass(frozen=True)
 class ThermistorConfig:
@@ -20,7 +23,7 @@ class ThermistorConfig:
 @dataclass(frozen=True)
 class ChannelMap:
     ai: Dict[str, int]  # deph_return, deph_supply, cond_return, cond_supply
-    ao: Dict[str, int]  # dephlegmator, condenser
+    ao: Dict[str, int]  # dephlegmator, condenser, supply
 
 
 @dataclass(frozen=True)
@@ -39,11 +42,23 @@ class ProfileConfig:
 
 
 @dataclass(frozen=True)
+class SupplyConfig:
+    """The city water supply valve loop. One shared setting, not per profile:
+    the water bath serves every profile."""
+
+    setpoint_f: float
+    pid: PidGains
+    output_limits: Tuple[float, float]
+    sample_time: float
+
+
+@dataclass(frozen=True)
 class AppConfig:
     thermistor: ThermistorConfig
     channels: ChannelMap
     default_profile: str
     profiles: Dict[str, ProfileConfig]
+    supply: SupplyConfig
 
 
 def load_config(path: str | Path) -> AppConfig:
@@ -52,6 +67,16 @@ def load_config(path: str | Path) -> AppConfig:
 
     thermistor = ThermistorConfig(**data["thermistor"])
     channels = ChannelMap(ai=dict(data["channels"]["ai"]), ao=dict(data["channels"]["ao"]))
+    missing = [name for name in REQUIRED_VALVES if name not in channels.ao]
+    if missing:
+        raise ValueError(f"channels.ao is missing valves: {missing}")
+    sup = data["supply"]
+    supply = SupplyConfig(
+        setpoint_f=sup["setpoint_f"],
+        pid=PidGains(**sup["pid"]),
+        output_limits=tuple(sup["output_limits"]),
+        sample_time=sup.get("sample_time", 1.0),
+    )
 
     profiles: Dict[str, ProfileConfig] = {}
     for name, p in data["profiles"].items():
@@ -71,4 +96,5 @@ def load_config(path: str | Path) -> AppConfig:
         channels=channels,
         default_profile=default_profile,
         profiles=profiles,
+        supply=supply,
     )

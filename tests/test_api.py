@@ -40,8 +40,20 @@ def test_state_shape(env):
     assert body["mode"] == "auto"
     assert body["profile"] == "whiskey"
     assert set(body["temps_f"]) == {"deph_supply", "deph_return", "cond_supply", "cond_return"}
-    assert set(body["valves_pct"]) == {"dephlegmator", "condenser"}
+    assert set(body["valves_pct"]) == {"dephlegmator", "condenser", "supply"}
+    assert body["supply_setpoint_f"] == 90
+    assert body["supply_pid_gains"] == {"p": -1.0, "i": -0.01, "d": 0.0}
     assert body["pid_gains"] == {"p": -1.0, "i": -0.01, "d": 0.0}
+
+
+def test_supply_setpoint_and_gains(env):
+    client, controller, _ = env
+    r = client.put("/api/supply/setpoint", json={"setpoint_f": 85}, headers=AUTH)
+    assert r.json()["supply_setpoint_f"] == 85
+    r = client.put("/api/supply/pid", json={"p": -2.0, "i": -0.02, "d": 0.1}, headers=AUTH)
+    assert r.json()["supply_pid_gains"] == {"p": -2.0, "i": -0.02, "d": 0.1}
+    assert controller.state().supply_pid_gains == (-2.0, -0.02, 0.1)
+    assert client.put("/api/supply/setpoint", json={"setpoint_f": 999}, headers=AUTH).status_code == 422
 
 
 def test_profiles_and_switch(env):
@@ -110,7 +122,7 @@ def test_loop_stop_leaves_failsafe(env):
     loop.start()
     loop.stop()
     s = controller.state()
-    assert s.valves_pct == {"dephlegmator": 100.0, "condenser": 100.0}
+    assert s.valves_pct["dephlegmator"] == 100.0 and s.valves_pct["condenser"] == 100.0
     assert s.fault is None
 
 
@@ -123,5 +135,6 @@ def test_openapi_has_all_routes(env):
     client, _, _ = env
     paths = client.get("/openapi.json").json()["paths"]
     for p in ["/api/state", "/api/stream", "/api/history", "/api/profiles", "/api/profile",
-              "/api/setpoint", "/api/mode", "/api/valves/{name}", "/api/pid"]:
+              "/api/setpoint", "/api/mode", "/api/valves/{name}", "/api/pid",
+              "/api/supply/setpoint", "/api/supply/pid"]:
         assert p in paths
