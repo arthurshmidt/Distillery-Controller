@@ -39,7 +39,10 @@ class ControlLoop:
         if self._thread is not None:
             self._thread.join(timeout=self._interval_s * 3 + 1)
             self._thread = None
-        self._controller.failsafe("shutdown", is_fault=False)
+        try:
+            self._controller.failsafe("shutdown", is_fault=False)
+        except Exception:
+            logger.exception("could not command the failsafe position at shutdown")
 
     def history(self, since: Optional[float] = None, limit: Optional[int] = None) -> List[HistoryPoint]:
         return self._store.history(since=since, limit=limit)
