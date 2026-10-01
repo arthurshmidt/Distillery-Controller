@@ -16,6 +16,8 @@ from .hardware import SimulatedHW, WidgetlordsHW
 from .runner import ControlLoop
 from .store import Store
 
+logger = logging.getLogger(__name__)
+
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="still", description=__doc__)
@@ -45,9 +47,14 @@ def main(argv=None) -> int:
     try:
         uvicorn.run(app, host=args.host, port=args.port)
     finally:
-        loop.stop()
-        hw.close()
-        store.close()
+        # uvicorn turns SIGTERM/SIGINT into a normal return, so systemd stop
+        # lands here. Each step is guarded so a failure in one cannot skip the rest.
+        logger.info("shutting down, opening valves")
+        for step in (loop.stop, hw.close, store.close):
+            try:
+                step()
+            except Exception:
+                logger.exception("shutdown step %s failed", getattr(step, "__qualname__", step))
     return 0
 
 

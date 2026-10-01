@@ -1,0 +1,22 @@
+[Unit]
+Description=Shmidt Spirits still controller
+After=network.target
+
+[Service]
+Type=simple
+# Adjust User and the paths below to match the install location on the Pi.
+# The user needs access to the SPI device (e.g. be in the spi and gpio groups).
+User=pi
+WorkingDirectory=/home/pi/Distillery-Controller
+# Contains the line STILL_TOKEN=<token>; keep it chmod 600.
+EnvironmentFile=/etc/still/still.env
+ExecStart=/home/pi/Distillery-Controller/.venv/bin/still --config config/still.yaml --db /var/lib/still/still.db --host 0.0.0.0
+StateDirectory=still
+# SIGTERM makes uvicorn exit normally, which opens both valves (failsafe).
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
