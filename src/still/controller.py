@@ -193,7 +193,7 @@ class Controller:
             mode = self._state.mode
 
         if mode == Mode.OFF:
-            return self.failsafe("off", temps=temps)
+            return self.failsafe("off", is_fault=False, temps=temps)
         try:
             if mode == Mode.MANUAL:
                 return self._apply_manual(temps)

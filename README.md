@@ -16,7 +16,7 @@ City water feeds a **water bath** through the **supply valve**. The bath also re
   - `auto`: the PID runs.
   - `manual`: the operator sets the valve positions.
   - `off`: the dephlegmator and condenser valves open; the supply valve holds its last position.
-- **Failsafe:** the dephlegmator and condenser valves fully open. The supply valve is not moved: it holds its last position (it is not commanded at all until the first auto tick after startup). It is applied in `off` mode, on shutdown, and when a fault is detected: a sensor read error, an out-of-range or NaN temperature, or a valve write error. The reason is reported in the `fault` field of the state.
+- **Failsafe:** the dephlegmator and condenser valves fully open. The supply valve is not moved: it holds its last position (it is not commanded at all until the first auto tick after startup). It is applied in `off` mode (not reported as a fault), on shutdown, and when a fault is detected: a sensor read error, an out-of-range or NaN temperature, or a valve write error. The reason for a fault is reported in the `fault` field of the state.
 - **Sensor check:** raw ADC counts within 10 counts of either end of the range are treated as an open or shorted thermistor. The 10-count margin is an estimate and still needs checking on the Pi.
 
 ### Signal chain
@@ -123,7 +123,7 @@ The tests run entirely against `SimulatedHW` and need no hardware.
 Phases 1, 2, 4, 5 and 6 of [`PLAN.md`](PLAN.md) are done. Still to do:
 
 - **Phase 3:** verify against the real boards on the Pi, including the sensor-check margin and the systemd shutdown.
-- **Phase 7:** the web front end, built with Claude Design. See [`docs/frontend-brief.md`](docs/frontend-brief.md).
+- **Phase 7:** the web front end, designed in Claude Design (see [`docs/still-control-frontend-handoff.md`](docs/still-control-frontend-handoff.md)). The dashboard is built and served at `/` from `src/still/static/` (no token needed to load it; the page asks for the token). The History and Settings screens are placeholders, and the daemon changes B2 to B8 in the handoff are still to do.
 
 ## Safety
 

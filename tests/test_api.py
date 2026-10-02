@@ -138,3 +138,16 @@ def test_openapi_has_all_routes(env):
               "/api/setpoint", "/api/mode", "/api/valves/{name}", "/api/pid",
               "/api/supply/setpoint", "/api/supply/pid"]:
         assert p in paths
+
+
+def test_serves_front_end_without_token(env):
+    client, _, _ = env
+    page = client.get("/")
+    assert page.status_code == 200
+    assert "Still Control" in page.text
+    for asset in ("/app.js", "/styles.css", "/fonts/fonts.css"):
+        assert client.get(asset).status_code == 200, asset
+    # only /api is protected, and the static mount does not shadow it
+    assert client.get("/api/state").status_code == 401
+    assert client.get("/api/state", headers=AUTH).status_code == 200
+    assert client.get("/openapi.json").status_code == 200

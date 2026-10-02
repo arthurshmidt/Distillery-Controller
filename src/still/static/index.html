@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Still Control</title>
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div id="app" class="still">
+
+<!-- Banners are moved under the header of whichever screen is showing. -->
+<div id="banners" style="display: flex; flex-direction: column; gap: 12px">
+  <div id="bn-fault" class="banner fault" role="alert" hidden>
+    <svg class="blink" width="44" height="44" viewBox="0 0 24 24" aria-hidden="true" style="flex: none; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 3 L22 20 L2 20 Z"/><path d="M12 10 L12 14"/><path d="M12 17 L12 17.2"/></svg>
+    <div class="grow">
+      <h2>FAILSAFE ACTIVE</h2>
+      <div class="why" id="fault-text"></div>
+    </div>
+    <ul>
+      <li>Dephlegmator valve 100%, full flow</li>
+      <li>Condenser valve 100%, full flow</li>
+      <li id="fault-supply"></li>
+    </ul>
+    <a class="btn" id="fault-go" href="#/" hidden>GO TO DASHBOARD</a>
+  </div>
+  <div id="bn-lost" class="banner amber" role="alert" hidden>
+    <svg class="blink" width="40" height="40" viewBox="0 0 24 24" aria-hidden="true" style="flex: none; fill: none; stroke: #fab219; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M3 9 C8 4 16 4 21 9"/><path d="M6.5 12.5 C9.5 9.5 14.5 9.5 17.5 12.5"/><path d="M12 17 L12 17.2"/><path d="M3 3 L21 21"/></svg>
+    <div class="grow">
+      <h2>STREAM DISCONNECTED</h2>
+      <div>Values on screen are stale. Last data <span id="lost-at">—</span>, <span id="lost-ago">0 s</span> ago. The controller keeps running. Controls are locked until the stream is back.</div>
+    </div>
+    <div class="row" style="gap: 16px">
+      <span style="font-size: 14px; color: var(--muted)">Reconnecting…</span>
+      <button type="button" id="retry" class="btn btn-amber" style="height: 48px">RETRY NOW</button>
+    </div>
+  </div>
+  <div id="bn-off" class="banner amber off" role="status" hidden>
+    <h2>CONTROL OFF</h2>
+    <div>Valves are in the failsafe position: dephlegmator and condenser at 100% (full flow, no bypass), supply valve holding its last position.</div>
+  </div>
+</div>
+
+<!-- Dashboard ---------------------------------------------------------- -->
+<div id="view-dashboard" class="view" style="display: contents">
+<header class="panel top">
+  <div class="title">
+    <div class="eyebrow">SHMIDT SPIRITS</div>
+    <h1>STILL CONTROL</h1>
+  </div>
+  <div role="group" aria-label="Control mode" class="seg" id="modes">
+    <button type="button" data-mode="auto">AUTO</button>
+    <button type="button" data-mode="manual" class="amber">MANUAL</button>
+    <button type="button" data-mode="off" class="amber">OFF</button>
+  </div>
+  <div role="group" aria-label="Profile" class="seg" id="profiles"></div>
+  <div class="row" style="gap: 16px">
+    <div role="status" class="conn" id="conn"><span class="dot"></span><div><b id="conn-label">LIVE</b><small id="conn-detail"></small></div></div>
+    <a href="#/settings" class="icon-btn" aria-label="Settings"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="7"/><path d="M12 2 L12 5"/><path d="M12 19 L12 22"/><path d="M2 12 L5 12"/><path d="M19 12 L22 12"/><path d="M4.9 4.9 L7.1 7.1"/><path d="M16.9 16.9 L19.1 19.1"/><path d="M4.9 19.1 L7.1 16.9"/><path d="M16.9 7.1 L19.1 4.9"/></svg></a>
+  </div>
+</header>
+
+<main>
+<section aria-label="Process" class="panel left">
+  <div role="group" aria-label="Left panel view" class="tabs" id="tabs">
+    <button type="button" data-tab="process">PROCESS</button>
+    <button type="button" data-tab="adv">ADVANCED · PID</button>
+  </div>
+
+  <div class="mimic-box" id="tab-process">
+<div style="position: relative; flex: none; width: min(100cqw, calc(100cqh * 0.85)); aspect-ratio: 680 / 800; container-type: inline-size">
+<svg viewBox="0 0 680 800" aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; fill: none; stroke-linecap: round; stroke-linejoin: round">
+<path d="M128 72 L128 40 L612 40 L612 100" style="stroke: #aab4c0; stroke-width: 4"></path>
+<path d="M612 472 L612 504" style="stroke: #aab4c0; stroke-width: 4"></path>
+<path d="M300 684 L300 165 L172 165" style="stroke: #3987e5; stroke-width: 3.5"></path>
+<path d="M524 684 L524 452 L584 452" style="stroke: #3987e5; stroke-width: 3.5"></path>
+<path d="M24 740 L252 740" style="stroke: #3987e5; stroke-width: 3.5"></path>
+<path d="M300 620 L372 620" style="stroke: #3987e5; stroke-width: 3.5"></path>
+<path d="M524 620 L452 620" style="stroke: #3987e5; stroke-width: 3.5"></path>
+<path d="M172 122 L372 122 L372 684" style="stroke: #d95926; stroke-width: 3.5; stroke-dasharray: 10 7"></path>
+<path d="M584 122 L452 122 L452 684" style="stroke: #d95926; stroke-width: 3.5; stroke-dasharray: 10 7"></path>
+<g style="fill: #3987e5; stroke: none">
+<path d="M300 430 L292 446 L308 446 Z"></path>
+<path d="M226 165 L242 157 L242 173 Z"></path>
+<path d="M566 452 L550 444 L550 460 Z"></path>
+<path d="M226 740 L210 732 L210 748 Z"></path>
+<path d="M354 620 L340 613 L340 627 Z"></path>
+<path d="M470 620 L484 613 L484 627 Z"></path>
+</g>
+<g style="fill: #d95926; stroke: none">
+<path d="M260 122 L244 114 L244 130 Z"></path>
+<path d="M372 550 L364 534 L380 534 Z"></path>
+<path d="M510 122 L526 114 L526 130 Z"></path>
+<path d="M452 430 L444 414 L460 414 Z"></path>
+<circle cx="372" cy="620" r="5"></circle>
+<circle cx="452" cy="620" r="5"></circle>
+</g>
+<g style="fill: #aab4c0; stroke: none">
+<path d="M480 40 L464 32 L464 48 Z"></path>
+<path d="M612 518 L603 502 L621 502 Z"></path>
+</g>
+<g style="stroke: #dfe6ee; stroke-width: 2.5; fill: #0c0f13">
+<path d="M60 594 L50 628"></path>
+<path d="M196 594 L206 628"></path>
+<rect x="28" y="452" width="200" height="148" rx="46"></rect>
+<rect x="96" y="196" width="64" height="256"></rect>
+<path d="M96 260 L160 260"></path>
+<path d="M96 324 L160 324"></path>
+<path d="M96 388 L160 388"></path>
+<circle cx="128" cy="228" r="10"></circle>
+<circle cx="128" cy="292" r="10"></circle>
+<circle cx="128" cy="356" r="10"></circle>
+<circle cx="128" cy="420" r="10"></circle>
+<path d="M96 100 Q96 72 128 72 Q160 72 160 100 Z"></path>
+<rect x="84" y="100" width="88" height="96" rx="4"></rect>
+<rect x="584" y="100" width="56" height="372" rx="6"></rect>
+<rect x="252" y="684" width="316" height="84" rx="6" style="fill: #10243f"></rect>
+</g>
+<g style="stroke: #5f6b78; stroke-width: 1.5">
+<path d="M100 112 L100 184"></path>
+<path d="M114 112 L114 184"></path>
+<path d="M128 112 L128 184"></path>
+<path d="M142 112 L142 184"></path>
+<path d="M156 112 L156 184"></path>
+<path d="M598 114 L598 458"></path>
+<path d="M612 114 L612 458"></path>
+<path d="M626 114 L626 458"></path>
+</g>
+<g style="stroke: #dfe6ee; stroke-width: 2.5; fill: #0c0f13">
+<path d="M300 620 L274 620"></path>
+<rect x="260" y="611" width="14" height="18"></rect>
+<path d="M289 606 L311 606 L300 620 Z"></path>
+<path d="M289 634 L311 634 L300 620 Z"></path>
+<path d="M314 609 L314 631 L300 620 Z"></path>
+<path d="M524 620 L550 620"></path>
+<rect x="550" y="611" width="14" height="18"></rect>
+<path d="M513 606 L535 606 L524 620 Z"></path>
+<path d="M513 634 L535 634 L524 620 Z"></path>
+<path d="M510 609 L510 631 L524 620 Z"></path>
+<path d="M150 740 L150 718"></path>
+<rect x="141" y="704" width="18" height="14"></rect>
+<path d="M136 727 L136 753 L150 740 Z"></path>
+<path d="M164 727 L164 753 L150 740 Z"></path>
+</g>
+</svg>
+
+<div style="position: absolute; left: 48.5%; top: 1.5%; font-size: clamp(9px, 1.9cqw, 13px); font-weight: 600; letter-spacing: 0.14em; color: #9aa7b5">VAPOR</div>
+<div style="position: absolute; left: 26.8%; top: 10.2%; font-size: clamp(9px, 1.9cqw, 13px); font-weight: 600; letter-spacing: 0.14em; color: #9aa7b5">DEPHLEGMATOR</div>
+<div style="position: absolute; right: 12.4%; top: 10.2%; white-space: nowrap; font-size: clamp(9px, 1.9cqw, 13px); font-weight: 600; letter-spacing: 0.14em; color: #9aa7b5">CONDENSER</div>
+<div style="position: absolute; right: 87.4%; top: 39.4%; white-space: nowrap; font-size: clamp(9px, 1.9cqw, 13px); font-weight: 600; letter-spacing: 0.14em; color: #9aa7b5">COLUMN</div>
+<div style="position: absolute; left: 4.1%; top: 64.6%; width: 29.4%; text-align: center; font-size: clamp(9px, 1.9cqw, 13px); font-weight: 600; letter-spacing: 0.14em; color: #9aa7b5">POT</div>
+<div style="position: absolute; left: 37.1%; top: 92%; width: 46.4%; text-align: center; font-size: clamp(9px, 1.9cqw, 13px); font-weight: 600; letter-spacing: 0.14em; color: #a9c4ea">WATER BATH</div>
+<div style="position: absolute; left: 47%; top: 79.4%; font-size: clamp(7px, 1.5cqw, 10px); font-weight: 600; letter-spacing: 0.12em; color: #9aa7b5">BYPASS</div>
+<div style="position: absolute; left: 67.6%; top: 79.4%; font-size: clamp(7px, 1.5cqw, 10px); font-weight: 600; letter-spacing: 0.12em; color: #9aa7b5">BYPASS</div>
+<div style="position: absolute; left: 3.5%; top: 94.4%; font-size: clamp(9px, 1.9cqw, 13px); font-weight: 600; letter-spacing: 0.14em; color: #9aa7b5">CITY WATER</div>
+<div style="position: absolute; right: 1%; top: 65.4%; white-space: nowrap; font-size: clamp(9px, 1.9cqw, 13px); font-weight: 600; letter-spacing: 0.14em; color: #9aa7b5">DISTILLATE</div>
+
+<div style="position: absolute; left: 36.47%; top: 33.75%; width: 15.3%; height: 6%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0c0f13; border: 1px solid #3987e5; border-radius: 4px"><span style="font-size: clamp(8px, 1.6cqw, 11px); font-weight: 600; letter-spacing: 0.12em; color: #9aa7b5; line-height: 1.2">SUPPLY</span><span class="val" style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: clamp(10px, 2.7cqw, 18px); font-weight: 700; color: #e6ebf1; line-height: 1.15"><span data-t="deph_supply">—</span>°</span></div>
+<div style="position: absolute; left: 47.06%; top: 43.75%; width: 15.3%; height: 6%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0c0f13; border: 2px solid #d95926; border-radius: 4px"><span style="font-size: clamp(8px, 1.6cqw, 11px); font-weight: 600; letter-spacing: 0.12em; color: #9aa7b5; line-height: 1.2">RETURN</span><span class="val" style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: clamp(10px, 2.7cqw, 18px); font-weight: 700; color: #e6ebf1; line-height: 1.15"><span data-t="deph_return">—</span>°</span></div>
+<div style="position: absolute; left: 58.82%; top: 33.75%; width: 15.3%; height: 6%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0c0f13; border: 1px solid #d95926; border-radius: 4px"><span style="font-size: clamp(8px, 1.6cqw, 11px); font-weight: 600; letter-spacing: 0.12em; color: #9aa7b5; line-height: 1.2">RETURN</span><span class="val" style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: clamp(10px, 2.7cqw, 18px); font-weight: 700; color: #e6ebf1; line-height: 1.15"><span data-t="cond_return">—</span>°</span></div>
+<div style="position: absolute; left: 69.41%; top: 59.5%; width: 15.3%; height: 6%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0c0f13; border: 1px solid #3987e5; border-radius: 4px"><span style="font-size: clamp(8px, 1.6cqw, 11px); font-weight: 600; letter-spacing: 0.12em; color: #9aa7b5; line-height: 1.2">SUPPLY</span><span class="val" style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: clamp(10px, 2.7cqw, 18px); font-weight: 700; color: #e6ebf1; line-height: 1.15"><span data-t="cond_supply">—</span>°</span></div>
+
+<div style="position: absolute; left: 36.47%; top: 68.5%; width: 15.3%; height: 6%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0c0f13; border: 2px solid #dfe6ee; border-radius: 4px" data-vtag="dephlegmator"><span style="font-size: clamp(8px, 1.6cqw, 11px); font-weight: 700; letter-spacing: 0.1em; ; line-height: 1.2">VALVE</span><span class="val" style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: clamp(10px, 2.7cqw, 18px); font-weight: 700; color: #ffffff; line-height: 1.15">—</span></div>
+<div style="position: absolute; left: 69.41%; top: 68.5%; width: 15.3%; height: 6%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0c0f13; border: 2px solid #dfe6ee; border-radius: 4px" data-vtag="condenser"><span style="font-size: clamp(8px, 1.6cqw, 11px); font-weight: 700; letter-spacing: 0.1em; ; line-height: 1.2">VALVE</span><span class="val" style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: clamp(10px, 2.7cqw, 18px); font-weight: 700; color: #ffffff; line-height: 1.15">—</span></div>
+<div style="position: absolute; left: 14.41%; top: 81%; width: 15.3%; height: 6%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #0c0f13; border: 2px solid #dfe6ee; border-radius: 4px" data-vtag="supply"><span style="font-size: clamp(8px, 1.6cqw, 11px); font-weight: 700; letter-spacing: 0.1em; ; line-height: 1.2">VALVE</span><span class="val" style="font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; font-size: clamp(10px, 2.7cqw, 18px); font-weight: 700; color: #ffffff; line-height: 1.15">—</span></div>
+
+<div style="position: absolute; left: 37.1%; top: 97.2%; width: 46.4%; display: flex; justify-content: center; align-items: center; gap: 4%; font-size: clamp(8px, 1.7cqw, 12px); color: #9aa7b5">
+<span style="display: flex; align-items: center; gap: 6px"><svg width="26" height="4" viewBox="0 0 26 4" aria-hidden="true" style="flex: none"><path d="M0 2 L26 2" style="stroke: #3987e5; stroke-width: 3"></path></svg>Supply</span>
+<span style="display: flex; align-items: center; gap: 6px"><svg width="26" height="4" viewBox="0 0 26 4" aria-hidden="true" style="flex: none"><path d="M0 2 L26 2" style="stroke: #d95926; stroke-width: 3; stroke-dasharray: 7 4"></path></svg>Return</span>
+</div>
+</div>
+  </div>
+
+  <div class="adv" id="tab-adv" hidden>
+    <p>Negative gains are reverse acting: the valve opens as temperature rises. Output limits clamp the PID only, not manual moves.</p>
+
+    <div role="group" aria-label="Dephlegmator PID gains" class="pidbox" data-loop="deph">
+      <header><h2>DEPHLEGMATOR LOOP</h2><span data-f="profile"></span></header>
+      <div class="grid3">
+        <div class="field"><label class="lbl" for="pid-p">P GAIN</label><input id="pid-p" data-g="p" type="number" step="0.1" inputmode="decimal"></div>
+        <div class="field"><label class="lbl" for="pid-i">I GAIN</label><input id="pid-i" data-g="i" type="number" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label class="lbl" for="pid-d">D GAIN</label><input id="pid-d" data-g="d" type="number" step="0.01" inputmode="decimal"></div>
+      </div>
+      <div class="row wrap" style="justify-content: space-between">
+        <span class="warn" data-f="warn" role="alert" hidden>Gains must be numbers.</span>
+        <button type="button" class="btn btn-solid" data-f="apply" style="margin-left: auto; min-width: 140px">APPLY</button>
+      </div>
+      <div class="terms">
+        <span>P term <b class="val" data-f="tp">—</b></span>
+        <span>I term <b class="val" data-f="ti">—</b></span>
+        <span>D term <b class="val" data-f="td">—</b></span>
+        <span>Valve <b class="val" data-f="valve">—</b></span>
+        <span>Output limits <b class="val" data-f="limits">—</b></span>
+      </div>
+    </div>
+
+    <div role="group" aria-label="Supply loop PID gains" class="pidbox" data-loop="sup">
+      <header><h2>SUPPLY LOOP · CITY WATER</h2><span>Shared by both profiles</span></header>
+      <div class="grid3">
+        <div class="field"><label class="lbl" for="spid-p">P GAIN</label><input id="spid-p" data-g="p" type="number" step="0.1" inputmode="decimal"></div>
+        <div class="field"><label class="lbl" for="spid-i">I GAIN</label><input id="spid-i" data-g="i" type="number" step="0.01" inputmode="decimal"></div>
+        <div class="field"><label class="lbl" for="spid-d">D GAIN</label><input id="spid-d" data-g="d" type="number" step="0.01" inputmode="decimal"></div>
+      </div>
+      <div class="row wrap" style="justify-content: space-between">
+        <span class="warn" data-f="warn" role="alert" hidden>Gains must be numbers.</span>
+        <button type="button" class="btn btn-solid" data-f="apply" style="margin-left: auto; min-width: 140px">APPLY</button>
+      </div>
+      <div class="terms">
+        <span>P term <b class="val" data-f="tp">—</b></span>
+        <span>I term <b class="val" data-f="ti">—</b></span>
+        <span>D term <b class="val" data-f="td">—</b></span>
+        <span>Valve <b class="val" data-f="valve">—</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="right">
+  <section aria-label="Temperature trends" class="panel trend">
+    <div class="row wrap" style="justify-content: space-between; gap: 6px 16px">
+      <h2>TEMPERATURES <span style="color: var(--muted); font-weight: 600">°F</span></h2>
+      <div class="row wrap" style="gap: 6px 12px">
+        <div role="group" aria-label="Time range" class="ranges row" id="ranges" style="gap: 4px">
+          <button type="button" data-range="300">5 MIN</button>
+          <button type="button" data-range="900">15 MIN</button>
+          <button type="button" data-range="3600">1 HR</button>
+        </div>
+        <a class="btn" href="#/history">HISTORY<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round"><path d="M9 5 L16 12 L9 19"/></svg></a>
+      </div>
+    </div>
+    <div class="legend" id="legend">
+      <button type="button" data-key="dr"><span class="sw" style="background: #d95926"></span>Deph return</button>
+      <button type="button" data-key="ds"><span class="sw" style="background: #3987e5"></span>Deph supply</button>
+      <button type="button" data-key="cr"><span class="sw" style="background: #c98500"></span>Cond return</button>
+      <button type="button" data-key="cs"><span class="sw" style="background: #199e70"></span>Cond supply</button>
+      <span class="row" style="height: 44px; padding: 0 8px; font-size: 13px; color: var(--muted); gap: 6px"><svg width="22" height="4" viewBox="0 0 22 4" aria-hidden="true"><path d="M0 2 L22 2" style="stroke: #c9d2dc; stroke-width: 2; stroke-dasharray: 5 4"/></svg>Setpoint</span>
+    </div>
+    <div class="plot">
+      <div class="yaxis" aria-hidden="true" id="yaxis"><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="plot-area" id="plot">
+        <svg viewBox="0 0 1000 300" preserveAspectRatio="none" role="img" aria-label="Line chart of dephlegmator and condenser supply and return temperatures with their setpoints over time">
+          <g style="stroke: #1e252e; stroke-width: 1">
+            <path d="M0 0 L1000 0"/><path d="M0 75 L1000 75"/><path d="M0 150 L1000 150"/><path d="M0 225 L1000 225"/>
+            <path d="M0 300 L1000 300" style="stroke: #3a4452"/>
+          </g>
+          <path id="ln-ssp" style="stroke: #3987e5; stroke-width: 1.5; stroke-dasharray: 6 5"/>
+          <path id="ln-sp" style="stroke: #d95926; stroke-width: 1.5; stroke-dasharray: 6 5"/>
+          <path id="ln-cs" style="stroke: #199e70; stroke-width: 2; stroke-linejoin: round"/>
+          <path id="ln-cr" style="stroke: #c98500; stroke-width: 2; stroke-linejoin: round"/>
+          <path id="ln-ds" style="stroke: #3987e5; stroke-width: 2; stroke-linejoin: round"/>
+          <path id="ln-dr" style="stroke: #d95926; stroke-width: 2.5; stroke-linejoin: round"/>
+        </svg>
+        <div class="cursor" id="cursor" hidden></div>
+        <div class="tip" id="tip" hidden></div>
+      </div>
+    </div>
+    <div class="xaxis" aria-hidden="true" id="xaxis"><span></span><span></span><span></span><span></span><span></span></div>
+  </section>
+
+  <div class="cards">
+    <section aria-label="Dephlegmator loop" class="panel card" data-card="deph">
+      <div class="loop-head"><h2>DEPHLEGMATOR</h2><span class="chip" data-f="chip"></span></div>
+      <div class="reading">
+        <div class="meta"><span class="lbl">RETURN</span><span class="lbl small">SUPPLY<b class="val"><span data-t="deph_supply">—</span>°</b></span></div>
+        <div class="big"><span class="val" data-t="deph_return">—</span><span class="unit">°F</span></div>
+      </div>
+      <div class="sp">
+        <div class="meta"><span class="lbl">SETPOINT</span><span class="val" data-f="dev"></span></div>
+        <div class="row">
+          <button type="button" class="btn" data-f="down" aria-label="Lower dephlegmator setpoint by 1 degree"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round"><path d="M5 12 L19 12"/></svg></button>
+          <div class="num" data-f="sp">—</div>
+          <button type="button" class="btn" data-f="up" aria-label="Raise dephlegmator setpoint by 1 degree"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round"><path d="M5 12 L19 12"/><path d="M12 5 L12 19"/></svg></button>
+        </div>
+      </div>
+      <div class="valve">
+        <div class="meta"><label class="lbl" for="v-deph">VALVE</label><span class="val" data-f="valve">—</span></div>
+        <input id="v-deph" class="slider" type="range" min="0" max="100" step="1" data-valve="dephlegmator">
+        <div class="scale" aria-hidden="true"><span>0 · BYPASS</span><span>100 · FULL FLOW</span></div>
+        <div class="hint" data-f="hint"></div>
+      </div>
+    </section>
+
+    <section aria-label="Supply loop" class="panel card" data-card="sup">
+      <div class="loop-head"><h2>SUPPLY LOOP</h2><span class="chip" data-f="chip"></span></div>
+      <div class="reading">
+        <div class="meta"><span class="lbl">BATH OUTLET</span></div>
+        <div class="big"><span class="val" data-t="deph_supply">—</span><span class="unit">°F</span></div>
+      </div>
+      <div class="sp">
+        <div class="meta"><span class="lbl">SETPOINT</span><span class="val" data-f="dev"></span></div>
+        <div class="row">
+          <button type="button" class="btn" data-f="down" aria-label="Lower supply setpoint by 1 degree"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round"><path d="M5 12 L19 12"/></svg></button>
+          <div class="num" data-f="sp">—</div>
+          <button type="button" class="btn" data-f="up" aria-label="Raise supply setpoint by 1 degree"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round"><path d="M5 12 L19 12"/><path d="M12 5 L12 19"/></svg></button>
+        </div>
+      </div>
+      <div class="valve">
+        <div class="meta"><label class="lbl" for="v-supply">SUPPLY VALVE</label><span class="val" data-f="valve">—</span></div>
+        <input id="v-supply" class="slider" type="range" min="0" max="100" step="1" data-valve="supply">
+        <div class="scale" aria-hidden="true"><span>0 · CLOSED</span><span>100 · OPEN</span></div>
+        <div class="hint" data-f="hint"></div>
+      </div>
+    </section>
+
+    <section aria-label="Condenser" class="panel card" data-card="cond">
+      <div class="loop-head"><h2>CONDENSER</h2><span class="chip" data-f="chip"></span></div>
+      <div class="reading">
+        <div class="meta"><span class="lbl">RETURN</span><span class="lbl small">SUPPLY<b class="val"><span data-t="cond_supply">—</span>°</b></span></div>
+        <div class="big"><span class="val" data-t="cond_return">—</span><span class="unit">°F</span></div>
+      </div>
+      <div class="noSp"><span class="lbl">NO SETPOINT</span><span>No PID on the condenser yet. In auto its valve is held at 100%, full flow.</span></div>
+      <div class="valve">
+        <div class="meta"><label class="lbl" for="v-cond">VALVE</label><span class="val" data-f="valve">—</span></div>
+        <input id="v-cond" class="slider" type="range" min="0" max="100" step="1" data-valve="condenser">
+        <div class="scale" aria-hidden="true"><span>0 · BYPASS</span><span>100 · FULL FLOW</span></div>
+        <div class="hint" data-f="hint"></div>
+      </div>
+    </section>
+  </div>
+</div>
+</main>
+</div>
+
+<!-- History and Settings: placeholders until those screens are built -->
+<div id="view-history" class="view" style="display: contents" hidden>
+  <header class="panel top"><div class="title"><div class="eyebrow">SHMIDT SPIRITS</div><h1>HISTORY</h1></div><a class="btn" href="#/">DASHBOARD</a></header>
+  <section class="panel stub"><p>The history screen is not built yet. The dashboard trend shows the last hour.</p></section>
+</div>
+<div id="view-settings" class="view" style="display: contents" hidden>
+  <header class="panel top"><div class="title"><div class="eyebrow">SHMIDT SPIRITS</div><h1>SETTINGS</h1></div><a class="btn" href="#/">DASHBOARD</a></header>
+  <section class="panel stub">
+    <p>The settings screen is not built yet.</p>
+    <div><button type="button" class="btn" id="signout">SIGN OUT</button></div>
+  </section>
+</div>
+
+</div>
+
+<div class="overlay" id="confirm" hidden>
+  <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="cf-title">
+    <h2 id="cf-title"></h2>
+    <ul id="cf-list"></ul>
+    <div class="btns">
+      <button type="button" class="btn btn-big" id="cf-cancel">CANCEL</button>
+      <button type="button" class="btn btn-big btn-amber" id="cf-ok"></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay login" id="login" hidden>
+  <form class="dialog plain" role="dialog" aria-modal="true" aria-labelledby="lg-title" id="login-form">
+    <div><div class="eyebrow">SHMIDT SPIRITS</div><h2 id="lg-title" style="font-size: 26px; letter-spacing: 0.06em">STILL CONTROL</h2></div>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <label class="lbl" for="lg-token">ACCESS TOKEN</label>
+      <input id="lg-token" type="password" autocomplete="off">
+      <div class="warn" id="lg-error" role="alert" hidden>Token rejected. Check it and try again.</div>
+      <span class="note">The token set as STILL_TOKEN on the controller. It is kept on this device only.</span>
+    </div>
+    <button type="submit" class="btn btn-solid btn-big">CONNECT</button>
+  </form>
+</div>
+</body>
+</html>

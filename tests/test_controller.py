@@ -64,7 +64,7 @@ def test_off_mode_forces_failsafe():
     state = controller.tick()
     assert state.valves_pct["dephlegmator"] == FAILSAFE_PERCENT
     assert state.valves_pct["condenser"] == FAILSAFE_PERCENT
-    assert state.fault == "off"
+    assert state.fault is None  # off is a chosen state, not a fault
 
 
 def test_manual_valve_requires_manual_mode():

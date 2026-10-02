@@ -1,6 +1,8 @@
 """The HTTP API (FastAPI) the web GUI talks to. See PLAN.md for the endpoint
 table. `/openapi.json` is the contract handed to the front end.
 
+The web GUI (`static/`) is served at `/` without a token.
+
 Every `/api` route requires the shared token, since the API can move valves.
 Send it as `Authorization: Bearer <token>`; the SSE stream also accepts a
 `?token=` query parameter because browser `EventSource` cannot set headers.
@@ -11,10 +13,12 @@ from __future__ import annotations
 import asyncio
 import json
 import secrets
+from pathlib import Path
 from typing import AsyncIterator, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .controller import Controller, ControllerState, Mode
@@ -24,6 +28,7 @@ from .runner import ControlLoop
 from .store import HistoryPoint
 
 STREAM_INTERVAL_S = 1.0
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 # -- response / request models ---------------------------------------------
@@ -227,4 +232,7 @@ def create_app(
         return state_model(controller.state())
 
     app.include_router(api)
+    # The web GUI. Unauthenticated so the login screen can load; only /api is protected.
+    # Mounted last so it never shadows /api, /docs or /openapi.json.
+    app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return app

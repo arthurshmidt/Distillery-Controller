@@ -57,7 +57,7 @@ Status: phases 1, 2, 4, 5 and 6 are done. Phase 3 needs the Pi.
 4. **API (done):** endpoints, SSE stream, token auth (`Authorization: Bearer`, or `?token=` for the SSE stream). Spec exported to `docs/openapi.json`; regenerate it when the API changes.
 5. **Persistence and logging (done):** `store.py`. SQLite history (one row per loop, 14 days kept, `/api/history` returns the newest 7200 points unless `limit` says otherwise) and saved settings: the active profile plus each profile's setpoint and PID gains. The mode is deliberately not saved; the daemon always starts in auto. `--db` sets the file (default `still.db`).
 6. **Daemonize (done):** `deploy/still.service` (token from `/etc/still/still.env`, DB in `/var/lib/still`, `Restart=on-failure`; logs go to the journal via stderr). On SIGTERM uvicorn returns normally and `main()` opens both valves, then closes the hardware and store, each step guarded so one failure cannot skip the others. The unit is untested on a Pi.
-7. **Front end:** built with Claude Design against the spec, served by the daemon.
+7. **Front end (in progress):** designed in Claude Design; the handoff is `docs/still-control-frontend-handoff.md`. Plain static files in `src/still/static/` (ES modules, no build step, bundled fonts) are served at `/` by `create_app()` (handoff B1, done). The dashboard is built; History and Settings are placeholders. B2 to B8 (daemon changes) are not started.
 8. **Tests:** unit tests on the simulator (conversions, PID limits, failsafe) and API tests.
 
 ## Workflow
