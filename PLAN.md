@@ -70,7 +70,7 @@ Every change is made on a branch created from `development` and merged back when
 
 ## Where we left off (2026-10-02)
 
-Everything below is on `development` (and pushed). `master` has not been updated with the front end yet; merge `development` into `master` once the browser check below passes.
+Everything below is on both `development` and `master` (merged and pushed on 2026-10-02, before the front end had been checked in a browser).
 
 **State:** the daemon and all three screens (dashboard, History, Settings) are built, and handoff items B1 to B8 are done. 102 tests pass (`.venv/bin/python -m pytest`). The front end was only ever exercised with throwaway jsdom scripts against `still --simulate`, never in a real browser. Nobody has seen how it looks.
 
@@ -83,8 +83,7 @@ Everything below is on `development` (and pushed). `master` has not been updated
    Open http://127.0.0.1:8000/ and enter the token `x`. Compare against the screenshots in `docs/still-control-frontend-handoff.zip` (`screenshots/`, 16 PNGs) and the checklist in section 8 of `docs/still-control-frontend-handoff.md`. The history database is `still.db` in the current directory; it fills at one row per second, so the History screen is mostly empty on a fresh start.
 2. **Fix what looks wrong.** Likely trouble spots, since none of it has been rendered: the process mimic (SVG plus percent-positioned tags, sized with container query units) at laptop, 11-inch tablet and phone widths; the History grid layout (`.hgrid` in `styles.css`); the chart cursor and tooltip; slider styling (`.slider`); focus rings and the 44px touch targets. The design source is `design/*.dc.html` inside the zip; the markup was copied from it, so differences are most likely in the CSS classes that replaced its inline styles.
 3. **Check the stream and auth paths by hand:** stop the daemon and confirm the amber STREAM DISCONNECTED banner appears within about 5 s, values grey out and controls lock, and that restarting clears it without a reload. Start with a wrong token and confirm the login overlay shows "Token rejected". Switch to Off and confirm the amber CONTROL OFF banner (not the red failsafe banner). Unplug nothing: to see a fault, there is no switch in the simulator yet.
-4. **Merge `development` into `master`** when it looks right.
-5. **Phase 3 on the Pi** (still the main unverified piece of the project): run against the real boards, confirm the `check_counts()` margin, try `deploy/still.service` and the SIGTERM shutdown, and measure the History queries (see below). Install `widgetlords` there and run without `--simulate`.
+4. **Phase 3 on the Pi** (still the main unverified piece of the project): run against the real boards, confirm the `check_counts()` margin, try `deploy/still.service` and the SIGTERM shutdown, and measure the History queries (see below). Install `widgetlords` there and run without `--simulate`.
 
 **Things deliberately left open:**
 - No floor on the dephlegmator output minimum. Any `0 <= min < max <= 100` is accepted, so a 0% minimum can cut all cooling flow in auto. Decide whether to enforce one.
