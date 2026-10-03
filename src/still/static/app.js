@@ -3,6 +3,7 @@
 import { auth, get, onUnauthorized } from './api.js';
 import { store, emit, onChange, pointFromState } from './state.js';
 import * as dashboard from './dashboard.js';
+import * as history from './history.js';
 import { clock } from './chart.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -32,6 +33,7 @@ function toast(message) {
   toastTimer = setTimeout(() => { el.hidden = true; }, 5000);
 }
 dashboard.setToast(toast);
+history.setToast(toast);
 
 // -- login ----------------------------------------------------------------------
 
@@ -119,6 +121,7 @@ async function start() {
   connect();
   dashboard.loadProfiles();
   dashboard.loadHistory();
+  if (store.route === 'history') history.load();
 }
 
 $('#retry').addEventListener('click', () => { backoff = 1000; connect(); });
@@ -142,6 +145,7 @@ function route() {
     $('#view-' + name).hidden = store.route !== name;
   }
   $('#view-' + store.route).querySelector('header').after($('#banners'));
+  if (store.route === 'history' && store.signedIn) history.load();
   emit();
 }
 window.addEventListener('hashchange', route);
@@ -169,6 +173,7 @@ const $$all = (sel) => Array.from(document.querySelectorAll(sel));
 onChange(() => {
   renderBanners();
   dashboard.render();
+  history.renderStatus();
 });
 
 document.addEventListener('keydown', (e) => {
@@ -176,5 +181,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 dashboard.init();
+history.init();
 route();
 start();

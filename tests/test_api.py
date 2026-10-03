@@ -136,7 +136,8 @@ def test_openapi_has_all_routes(env):
     paths = client.get("/openapi.json").json()["paths"]
     for p in ["/api/state", "/api/stream", "/api/history", "/api/profiles", "/api/profile",
               "/api/setpoint", "/api/mode", "/api/valves/{name}", "/api/pid",
-              "/api/supply/setpoint", "/api/supply/pid"]:
+              "/api/supply/setpoint", "/api/supply/pid", "/api/events", "/api/history.csv",
+              "/api/output-limits", "/api/supply/output-limits"]:
         assert p in paths
 
 
@@ -183,3 +184,49 @@ def test_manual_mode_holds_positions_over_api(env):
     client.put("/api/mode", json={"mode": "manual"}, headers=AUTH)
     state = controller.tick()
     assert state.valves_pct == auto.valves_pct
+
+
+def _log(loop, n=60, t0=1000.0, fault_at=None):
+    from still.controller import ControllerState, Mode
+    from still.hardware.base import Temperatures
+
+    for i in range(n):
+        fault = "boom" if fault_at is not None and fault_at <= i < fault_at + 3 else None
+        loop._store.add_history(t0 + i, ControllerState(
+            mode=Mode.AUTO, profile="whiskey", setpoint_f=130.0, temps_f=Temperatures(90, 120, 90, 100),
+            supply_setpoint_f=90.0, fault=fault))
+
+
+def test_history_until_and_step(env):
+    client, _, loop = env
+    _log(loop)
+    r = client.get("/api/history", headers=AUTH, params={"until": 1009, "step": 5}).json()
+    assert [p["timestamp"] for p in r] == [1000.0, 1005.0]
+    r = client.get("/api/history", headers=AUTH, params={"since": 1049, "step": 5}).json()
+    assert [p["timestamp"] for p in r] == [1050.0, 1055.0]
+    assert client.get("/api/history", headers=AUTH, params={"step": 0}).status_code == 422
+
+
+def test_events_endpoint(env):
+    client, _, loop = env
+    _log(loop, fault_at=20)
+    body = client.get("/api/events", headers=AUTH).json()
+    assert [e["text"] for e in body["events"] if e["kind"] == "fault"] == ["boom", "Fault cleared after 3 s"]
+    assert body["events"][0]["kind"] == "log"
+    assert [s["kind"] for s in body["segments"]] == ["auto", "fault", "auto"]
+    assert client.get("/api/events", params={"since": 1000}).status_code == 401
+
+
+def test_history_csv(env):
+    client, _, loop = env
+    _log(loop, n=10)
+    assert client.get("/api/history.csv").status_code == 401
+    r = client.get("/api/history.csv", headers=AUTH, params={"since": 1002, "until": 1004})
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/csv")
+    assert "attachment" in r.headers["content-disposition"]
+    lines = r.text.strip().split("\r\n")
+    assert lines[0].startswith("timestamp,time_utc,mode,profile")
+    assert len(lines) == 4
+    first = lines[1].split(",")
+    assert first[0] == "1002.000" and first[1] == "1970-01-01T00:16:42.000Z" and first[2] == "auto"

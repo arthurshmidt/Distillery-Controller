@@ -44,8 +44,20 @@ class ControlLoop:
         except Exception:
             logger.exception("could not command the failsafe position at shutdown")
 
-    def history(self, since: Optional[float] = None, limit: Optional[int] = None) -> List[HistoryPoint]:
-        return self._store.history(since=since, limit=limit)
+    def history(
+        self,
+        since: Optional[float] = None,
+        limit: Optional[int] = None,
+        until: Optional[float] = None,
+        step: Optional[float] = None,
+    ) -> List[HistoryPoint]:
+        return self._store.history(since=since, limit=limit, until=until, step=step)
+
+    def events(self, since: Optional[float] = None, until: Optional[float] = None):
+        return self._store.events(since=since, until=until)
+
+    def export_rows(self, since: Optional[float] = None, until: Optional[float] = None):
+        return self._store.rows_for_export(since, until)
 
     def _run(self) -> None:
         while not self._stop.is_set():

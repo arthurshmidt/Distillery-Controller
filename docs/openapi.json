@@ -120,6 +120,43 @@
             "description": "only points after this unix time"
           },
           {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "only points at or before this unix time",
+              "title": "Until"
+            },
+            "description": "only points at or before this unix time"
+          },
+          {
+            "name": "step",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "seconds; at most one point per step-second bucket (the earliest in it)",
+              "title": "Step"
+            },
+            "description": "seconds; at most one point per step-second bucket (the earliest in it)"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -162,6 +199,170 @@
                   },
                   "title": "Response Get History Api History Get"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events": {
+      "get": {
+        "summary": "Get Events",
+        "description": "Mode, profile, setpoint and fault changes and logging gaps, found in the\nfull-resolution rows (thinning in /history does not hide them), plus the\nmode/fault segments for the timeline.",
+        "operationId": "get_events_api_events_get",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix time, inclusive",
+              "title": "Since"
+            },
+            "description": "unix time, inclusive"
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix time, inclusive",
+              "title": "Until"
+            },
+            "description": "unix time, inclusive"
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history.csv": {
+      "get": {
+        "summary": "Get History Csv",
+        "description": "Every logged row in the window, full resolution. Send the token in the\nAuthorization header; a plain link cannot.",
+        "operationId": "get_history_csv_api_history_csv_get",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix time, inclusive",
+              "title": "Since"
+            },
+            "description": "unix time, inclusive"
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix time, inclusive",
+              "title": "Until"
+            },
+            "description": "unix time, inclusive"
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -741,6 +942,68 @@
   },
   "components": {
     "schemas": {
+      "EventModel": {
+        "properties": {
+          "timestamp": {
+            "type": "number",
+            "title": "Timestamp"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "mode, profile, setpoint, fault or log"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone",
+            "description": "amber for a move away from auto, red for a fault, else null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "kind",
+          "text"
+        ],
+        "title": "EventModel"
+      },
+      "EventsModel": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventModel"
+            },
+            "type": "array",
+            "title": "Events",
+            "description": "oldest first"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/SegmentModel"
+            },
+            "type": "array",
+            "title": "Segments",
+            "description": "timeline of mode and faults; stretches where nothing was logged are left out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "events",
+          "segments"
+        ],
+        "title": "EventsModel"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -947,6 +1210,30 @@
           "profiles"
         ],
         "title": "ProfilesModel"
+      },
+      "SegmentModel": {
+        "properties": {
+          "start": {
+            "type": "number",
+            "title": "Start"
+          },
+          "end": {
+            "type": "number",
+            "title": "End"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "auto, manual, off or fault (a fault wins over the mode)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "kind"
+        ],
+        "title": "SegmentModel"
       },
       "SetpointRequest": {
         "properties": {

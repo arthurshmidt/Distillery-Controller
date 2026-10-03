@@ -47,4 +47,14 @@ async function request(method, path, body) {
 }
 
 export const get = (path) => request('GET', path);
+
+// Fetch a file with the token in the header (a plain link cannot send it).
+export async function getBlob(path) {
+  const res = await fetch(path, { headers: { Authorization: 'Bearer ' + auth.token } });
+  if (!res.ok) {
+    if (res.status === 401) unauthorizedHandler();
+    throw new ApiError(res.status, res.statusText || String(res.status));
+  }
+  return res.blob();
+}
 export const put = (path, body) => request('PUT', path, body);

@@ -11,10 +11,13 @@ Send it as `Authorization: Bearer <token>`; the SSE stream also accepts a
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import json
 import secrets
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, Dict, Iterator, List, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -74,6 +77,37 @@ class StateModel(BaseModel):
 class HistoryPointModel(BaseModel):
     timestamp: float = Field(description="unix time, seconds")
     state: StateModel
+
+
+class EventModel(BaseModel):
+    timestamp: float
+    kind: str = Field(description="mode, profile, setpoint, fault or log")
+    text: str
+    tone: Optional[str] = Field(None, description="amber for a move away from auto, red for a fault, else null")
+
+
+class SegmentModel(BaseModel):
+    start: float
+    end: float
+    kind: str = Field(description="auto, manual, off or fault (a fault wins over the mode)")
+
+
+class EventsModel(BaseModel):
+    events: List[EventModel] = Field(description="oldest first")
+    segments: List[SegmentModel] = Field(description="timeline of mode and faults; stretches where nothing was logged are left out")
+
+
+CSV_HEADER = [
+    "timestamp", "time_utc", "mode", "profile", "dephlegmator_setpoint_f",
+    "deph_supply_f", "deph_return_f", "cond_supply_f", "cond_return_f",
+    "dephlegmator_valve_pct", "condenser_valve_pct", "supply_valve_pct", "supply_setpoint_f", "fault",
+]  # fmt: skip
+
+
+def _csv_line(values) -> str:
+    out = io.StringIO()
+    csv.writer(out, lineterminator="\r\n").writerow(values)
+    return out.getvalue()
 
 
 class ProfileModel(BaseModel):
@@ -185,9 +219,44 @@ def create_app(
     @api.get("/history", response_model=List[HistoryPointModel])
     def get_history(
         since: Optional[float] = Query(None, description="only points after this unix time"),
+        until: Optional[float] = Query(None, description="only points at or before this unix time"),
+        step: Optional[float] = Query(
+            None, gt=0, description="seconds; at most one point per step-second bucket (the earliest in it)"
+        ),
         limit: int = Query(7200, ge=0, le=100000, description="at most this many, newest kept"),
     ) -> List[HistoryPointModel]:
-        return [history_model(p) for p in loop.history(since=since, limit=limit)]
+        return [history_model(p) for p in loop.history(since=since, limit=limit, until=until, step=step)]
+
+    @api.get("/events", response_model=EventsModel)
+    def get_events(
+        since: Optional[float] = Query(None, description="unix time, inclusive"),
+        until: Optional[float] = Query(None, description="unix time, inclusive"),
+    ) -> EventsModel:
+        """Mode, profile, setpoint and fault changes and logging gaps, found in the
+        full-resolution rows (thinning in /history does not hide them), plus the
+        mode/fault segments for the timeline."""
+        events, segments = loop.events(since=since, until=until)
+        return EventsModel(events=events, segments=segments)
+
+    @api.get("/history.csv")
+    def get_history_csv(
+        since: Optional[float] = Query(None, description="unix time, inclusive"),
+        until: Optional[float] = Query(None, description="unix time, inclusive"),
+    ) -> StreamingResponse:
+        """Every logged row in the window, full resolution. Send the token in the
+        Authorization header; a plain link cannot."""
+
+        def lines() -> Iterator[str]:
+            yield _csv_line(CSV_HEADER)
+            for r in loop.export_rows(since=since, until=until):
+                t = datetime.fromtimestamp(r[0], tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+                yield _csv_line([f"{r[0]:.3f}", t, *["" if v is None else v for v in r[1:]]])
+
+        return StreamingResponse(
+            lines(),
+            media_type="text/csv",
+            headers={"Content-Disposition": 'attachment; filename="still-history.csv"'},
+        )
 
     @api.get("/profiles", response_model=ProfilesModel)
     def get_profiles() -> ProfilesModel:

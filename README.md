@@ -100,7 +100,9 @@ All `/api` routes require the token as `Authorization: Bearer <token>`. The SSE 
 |---|---|
 | `GET /api/state` | temperatures, valve %, setpoints, mode, profile, PID terms, gains and output limits (dephlegmator and supply), fault; `valves_pct.supply` is absent until it is first commanded |
 | `GET /api/stream` | server-sent events: the full state once a second |
-| `GET /api/history` | logged states; `since` (unix time) and `limit` (default 7200, newest kept) |
+| `GET /api/history` | logged states with `since` < time <= `until` (unix seconds); `step` (seconds) keeps at most one point per step-second bucket (the earliest), so a long window stays small; `limit` (default 7200, newest kept) |
+| `GET /api/events` | `since`, `until` (inclusive): `{events, segments}`. Events (`mode`, `profile`, `setpoint`, `fault`, `log`) come from the full-resolution rows, so thinning never hides a short fault; segments are the mode/fault timeline, with logging gaps left out |
+| `GET /api/history.csv` | `since`, `until`: every logged row in the window as CSV, streamed. Fetch it with the `Authorization` header and save the blob |
 | `GET /api/profiles` | list profiles and the active one |
 | `PUT /api/profile` | `{"name": ...}` select the active profile; keeps the current mode and manual valves |
 | `PUT /api/setpoint` | `{"setpoint_f": ...}` between -40 and 300 |
@@ -125,7 +127,7 @@ The tests run entirely against `SimulatedHW` and need no hardware.
 Phases 1, 2, 4, 5 and 6 of [`PLAN.md`](PLAN.md) are done. Still to do:
 
 - **Phase 3:** verify against the real boards on the Pi, including the sensor-check margin and the systemd shutdown.
-- **Phase 7:** the web front end, designed in Claude Design (see [`docs/still-control-frontend-handoff.md`](docs/still-control-frontend-handoff.md)). The dashboard is built and served at `/` from `src/still/static/` (no token needed to load it; the page asks for the token). The History and Settings screens are placeholders, B2 and B3 of the daemon changes in the handoff are done; B4 to B8 are still to do.
+- **Phase 7:** the web front end, designed in Claude Design (see [`docs/still-control-frontend-handoff.md`](docs/still-control-frontend-handoff.md)). The dashboard and History screens are built and served at `/` from `src/still/static/` (no token needed to load it; the page asks for the token). Settings is a placeholder. B1 to B4 of the daemon changes in the handoff are done; B5 to B8 are still to do.
 
 ## Safety
 

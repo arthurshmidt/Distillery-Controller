@@ -15,12 +15,29 @@ export function clock(t, secs) {
   return p(d.getHours()) + ':' + p(d.getMinutes()) + (secs ? ':' + p(d.getSeconds()) : '');
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Local time in the forms the History screen uses.
+export function fmtTime(t, how) {
+  const d = new Date(t * 1000);
+  const p = (v) => String(v).padStart(2, '0');
+  const hm = p(d.getHours()) + ':' + p(d.getMinutes());
+  const day = MONTHS[d.getMonth()] + ' ' + d.getDate();
+  if (how === 'hm') return hm;
+  if (how === 'hms') return hm + ':' + p(d.getSeconds());
+  if (how === 'day') return day;
+  if (how === 'dayhm') return day + ' ' + hm;
+  if (how === 'dayhms') return day + ' ' + hm + ':' + p(d.getSeconds());
+  return DAYS[d.getDay()] + ' ' + day + ' \u00b7 ' + hm + ':' + p(d.getSeconds());
+}
+
 export function fmt1(v) {
   return v == null || isNaN(v) ? '—' : v.toFixed(1);
 }
 
 // Returns the y range for the visible series, rounded out to tens.
-function yRange(pts, hidden) {
+export function yRange(pts, hidden) {
   let lo = Infinity, hi = -Infinity;
   const see = (v) => { if (v != null) { if (v < lo) lo = v; if (v > hi) hi = v; } };
   for (const p of pts) {
@@ -37,33 +54,41 @@ function yRange(pts, hidden) {
   return [lo, hi];
 }
 
+// SVG path for series `k` in a viewBox 1000 wide and `h` tall. Null values and
+// silences longer than `gap` seconds break the line instead of being bridged.
+export function linePath(pts, k, t0, span, y0, y1, h, gap, stepN = 1) {
+  let d = '', pen = false, prev = null;
+  for (let i = (pts.length - 1) % stepN; i < pts.length; i += stepN) {
+    const p = pts[i];
+    const v = p[k];
+    if (prev !== null && p.t - prev > gap) pen = false;
+    prev = p.t;
+    if (v == null) { pen = false; continue; }
+    const x = ((p.t - t0) / span) * 1000;
+    const y = h - ((v - y0) / (y1 - y0)) * h;
+    d += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
+    pen = true;
+  }
+  return d;
+}
+
+export function ticks(lo, hi) {
+  return [0, 1, 2, 3, 4].map((i) => String(hi - ((hi - lo) / 4) * i));
+}
+
 // Compute everything the view needs. `tEnd` is the right edge in unix seconds.
 export function layout(hist, range, hidden, tEnd) {
   const t0 = tEnd - range;
   const pts = hist.filter((p) => p.t >= t0 && p.t <= tEnd);
   const [lo, hi] = yRange(pts, hidden);
   const stepN = Math.max(1, Math.ceil(pts.length / 300));
-  const path = (k) => {
-    let d = '', pen = false, prev = null;
-    for (let i = (pts.length - 1) % stepN; i < pts.length; i += stepN) {
-      const p = pts[i];
-      const v = p[k];
-      if (v == null) { pen = false; continue; }
-      if (prev !== null && p.t - prev > GAP_S * stepN) pen = false;
-      const x = ((p.t - t0) / range) * 1000;
-      const y = 300 - ((v - lo) / (hi - lo)) * 300;
-      d += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' ';
-      pen = true;
-      prev = p.t;
-    }
-    return d;
-  };
+  const gap = GAP_S * stepN;
   const paths = {};
   for (const q of SERIES) {
-    paths[q.k] = hidden[q.k] ? '' : path(q.k);
-    if (q.sp) paths[q.sp] = hidden[q.k] ? '' : path(q.sp);
+    paths[q.k] = hidden[q.k] ? '' : linePath(pts, q.k, t0, range, lo, hi, 300, gap, stepN);
+    if (q.sp) paths[q.sp] = hidden[q.k] ? '' : linePath(pts, q.sp, t0, range, lo, hi, 300, gap, stepN);
   }
-  const yTicks = [0, 1, 2, 3, 4].map((i) => String(hi - ((hi - lo) / 4) * i));
+  const yTicks = ticks(lo, hi);
   const xTicks = [0, 1, 2, 3, 4].map((i) => clock(tEnd - range * (1 - i / 4), range <= 300));
   return { pts, paths, yTicks, xTicks, t0 };
 }

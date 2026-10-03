@@ -327,8 +327,99 @@
 
 <!-- History and Settings: placeholders until those screens are built -->
 <div id="view-history" class="view" style="display: contents" hidden>
-  <header class="panel top"><div class="title"><div class="eyebrow">SHMIDT SPIRITS</div><h1>HISTORY</h1></div><a class="btn" href="#/">DASHBOARD</a></header>
-  <section class="panel stub"><p>The history screen is not built yet. The dashboard trend shows the last hour.</p></section>
+<header class="panel top">
+  <a class="btn" href="#/" style="min-height: 48px"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round"><path d="M15 5 L8 12 L15 19"/></svg>DASHBOARD</a>
+  <div class="title"><div class="eyebrow">SHMIDT SPIRITS</div><h1>HISTORY</h1></div>
+  <div role="status" class="conn" id="h-conn"><span class="dot"></span><div><b id="h-conn-label">LIVE</b><small id="h-conn-detail"></small></div></div>
+</header>
+
+<div class="banner amber" id="h-failed" role="alert" hidden>
+  <div class="grow"><h2 style="font-size: 22px">COULD NOT LOAD HISTORY</h2><div>The controller did not answer the history request. The still keeps running; this only affects this screen.</div></div>
+  <button type="button" class="btn btn-amber" id="h-retry" style="height: 48px">RETRY</button>
+</div>
+
+<div class="panel winbar">
+  <div role="group" aria-label="Window length" class="seg wrap" id="h-spans">
+    <button type="button" data-span="3600">1 H</button>
+    <button type="button" data-span="14400">4 H</button>
+    <button type="button" data-span="43200">12 H</button>
+    <button type="button" data-span="86400">24 H</button>
+    <button type="button" data-span="259200">3 D</button>
+    <button type="button" data-span="604800">7 D</button>
+    <button type="button" data-span="1209600">14 D</button>
+  </div>
+  <div role="group" aria-label="Move window" class="row" style="gap: 4px">
+    <button type="button" class="btn icon" id="h-earlier" aria-label="Earlier by half a window"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round"><path d="M15 5 L8 12 L15 19"/></svg></button>
+    <button type="button" class="btn icon" id="h-later" aria-label="Later by half a window"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round"><path d="M9 5 L16 12 L9 19"/></svg></button>
+    <button type="button" class="btn" id="h-now" style="min-height: 48px">NOW</button>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: 1px; margin-right: auto; min-width: 0">
+    <span class="mono" id="h-window" style="font-size: 16px; font-weight: 700"></span>
+    <span id="h-note" style="font-size: 13px; color: var(--muted)"></span>
+  </div>
+  <button type="button" class="btn" id="h-export" style="min-height: 48px"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round"><path d="M12 4 L12 15"/><path d="M7 11 L12 16 L17 11"/><path d="M5 20 L19 20"/></svg>EXPORT CSV</button>
+</div>
+
+<main>
+<section aria-label="History charts" class="panel hcharts">
+  <div class="legend hlegend" id="h-legend">
+    <h2>TEMPERATURES <span style="color: var(--muted); font-weight: 600">°F</span></h2>
+    <button type="button" data-key="dr"><span class="sw" style="background: #d95926"></span>Deph return</button>
+    <button type="button" data-key="ds"><span class="sw" style="background: #3987e5"></span>Deph supply</button>
+    <button type="button" data-key="cr"><span class="sw" style="background: #c98500"></span>Cond return</button>
+    <button type="button" data-key="cs"><span class="sw" style="background: #199e70"></span>Cond supply</button>
+    <span class="row" style="height: 44px; padding: 0 8px; font-size: 13px; color: var(--muted); gap: 6px"><svg width="22" height="4" viewBox="0 0 22 4" aria-hidden="true"><path d="M0 2 L22 2" style="stroke: #c9d2dc; stroke-width: 2; stroke-dasharray: 5 4"/></svg>Setpoint</span>
+  </div>
+  <div class="hgrid" id="h-grid">
+    <div class="yaxis g1" aria-hidden="true" id="h-yaxis"><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="hplot g1" data-plot>
+      <svg viewBox="0 0 1000 300" preserveAspectRatio="none" role="img" aria-label="Temperatures and setpoints over the selected window">
+        <g style="stroke: #1e252e; stroke-width: 1"><path d="M0 0 L1000 0"/><path d="M0 75 L1000 75"/><path d="M0 150 L1000 150"/><path d="M0 225 L1000 225"/><path d="M0 300 L1000 300" style="stroke: #3a4452"/></g>
+        <path id="hl-ssp" style="stroke: #3987e5; stroke-width: 1.5; stroke-dasharray: 6 5"/>
+        <path id="hl-sp" style="stroke: #d95926; stroke-width: 1.5; stroke-dasharray: 6 5"/>
+        <path id="hl-cs" style="stroke: #199e70; stroke-width: 2; stroke-linejoin: round"/>
+        <path id="hl-cr" style="stroke: #c98500; stroke-width: 2; stroke-linejoin: round"/>
+        <path id="hl-ds" style="stroke: #3987e5; stroke-width: 2; stroke-linejoin: round"/>
+        <path id="hl-dr" style="stroke: #d95926; stroke-width: 2.5; stroke-linejoin: round"/>
+      </svg>
+    </div>
+    <div class="g2 vhead">
+      <h2>VALVES <span style="color: var(--muted); font-weight: 600">%</span></h2>
+      <span><i style="background: #d95926"></i>Dephlegmator</span>
+      <span><i style="background: #c98500"></i>Condenser</span>
+      <span><i style="background: #3987e5"></i>Supply</span>
+    </div>
+    <div class="yaxis g3" aria-hidden="true"><span>100</span><span>50</span><span>0</span></div>
+    <div class="hplot g3" data-plot>
+      <svg viewBox="0 0 1000 150" preserveAspectRatio="none" role="img" aria-label="Valve positions over the selected window">
+        <g style="stroke: #1e252e; stroke-width: 1"><path d="M0 0 L1000 0"/><path d="M0 75 L1000 75"/><path d="M0 150 L1000 150" style="stroke: #3a4452"/></g>
+        <path id="hl-vc" style="stroke: #c98500; stroke-width: 2; stroke-linejoin: round"/>
+        <path id="hl-vs" style="stroke: #3987e5; stroke-width: 2; stroke-linejoin: round"/>
+        <path id="hl-vd" style="stroke: #d95926; stroke-width: 2; stroke-linejoin: round"/>
+      </svg>
+    </div>
+    <div class="hplot g4 strip" data-plot role="img" aria-label="Mode and fault timeline" id="h-strip"></div>
+    <div class="g5 xaxis2" aria-hidden="true" id="h-xaxis"><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="overlay-area">
+      <div class="hcursor" id="h-cursor" hidden></div>
+      <div class="hblank" id="h-blank" hidden><div><div id="h-blank-title"></div><p id="h-blank-body"></p></div></div>
+    </div>
+  </div>
+</section>
+
+<div class="hside">
+  <section aria-label="Values at cursor" class="panel hread">
+    <div class="loop-head"><h2 style="font-size: 15px; letter-spacing: 0.12em">AT CURSOR</h2><span class="chip" id="r-chip">NO DATA</span></div>
+    <div class="mono" id="r-time" style="font-size: 20px; font-weight: 700"></div>
+    <div class="faulttext" id="r-fault" hidden></div>
+    <div id="r-rows"></div>
+  </section>
+  <section aria-label="Events in window" class="panel hevents">
+    <div class="row" style="justify-content: space-between; align-items: baseline; padding-right: 8px"><h2 style="font-size: 15px; letter-spacing: 0.12em">EVENTS</h2><span id="ev-note" style="font-size: 13px; color: var(--muted)"></span></div>
+    <div class="evlist" id="ev-list"></div>
+  </section>
+</div>
+</main>
 </div>
 <div id="view-settings" class="view" style="display: contents" hidden>
   <header class="panel top"><div class="title"><div class="eyebrow">SHMIDT SPIRITS</div><h1>SETTINGS</h1></div><a class="btn" href="#/">DASHBOARD</a></header>
