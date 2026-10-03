@@ -49,7 +49,7 @@ web GUI ──HTTP/SSE──> FastAPI ──> Controller (state snapshot + comma
   - Condenser: held at 100% open for now. The originals' condenser PID (P=1, I=0.1, D=0.05, limits 0-100, 5 s sample, setpoint 150 F) was commented out and never run; it is not used, and no condenser gains or setpoint are exposed until control is needed.
 
 ## Phases
-Status: phases 1, 2, 4, 5 and 6 are done. Phase 3 needs the Pi.
+Status: phases 1, 2, 4, 5 and 6 are done, and phase 7 (front end) is built but has never been opened in a real browser. Phase 3 needs the Pi.
 
 1. **Skeleton (done):** package layout, config and profile loading, hardware interface plus simulator, controller reproducing the whiskey dephlegmator behaviour.
 2. **Condenser and profiles (done):** condenser valve held 100% open (structured so a PID can be added later), profile switching, failsafe and sensor sanity checks (out-of-range counts trigger the failsafe). Implemented as `check_counts()` in the hardware layer plus a temperature range check in the controller.
@@ -67,3 +67,33 @@ Every change is made on a branch created from `development` and merged back when
 - The supply valve has no commanded startup position (the original homed it closed). Decide on the Pi whether it needs one.
 - Whether the API should refuse a dephlegmator output minimum below some floor (a 0% minimum could cut all cooling flow in auto).
 - If condenser control is wanted later, its gains and setpoint will need tuning on the real still.
+
+## Where we left off (2026-10-02)
+
+Everything below is on `development` (and pushed). `master` has not been updated with the front end yet; merge `development` into `master` once the browser check below passes.
+
+**State:** the daemon and all three screens (dashboard, History, Settings) are built, and handoff items B1 to B8 are done. 102 tests pass (`.venv/bin/python -m pytest`). The front end was only ever exercised with throwaway jsdom scripts against `still --simulate`, never in a real browser. Nobody has seen how it looks.
+
+**Next steps, in order:**
+1. **Run it and look at it** (needs a browser, which the previous machine did not have):
+   ```
+   python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+   STILL_TOKEN=x .venv/bin/still --simulate
+   ```
+   Open http://127.0.0.1:8000/ and enter the token `x`. Compare against the screenshots in `docs/still-control-frontend-handoff.zip` (`screenshots/`, 16 PNGs) and the checklist in section 8 of `docs/still-control-frontend-handoff.md`. The history database is `still.db` in the current directory; it fills at one row per second, so the History screen is mostly empty on a fresh start.
+2. **Fix what looks wrong.** Likely trouble spots, since none of it has been rendered: the process mimic (SVG plus percent-positioned tags, sized with container query units) at laptop, 11-inch tablet and phone widths; the History grid layout (`.hgrid` in `styles.css`); the chart cursor and tooltip; slider styling (`.slider`); focus rings and the 44px touch targets. The design source is `design/*.dc.html` inside the zip; the markup was copied from it, so differences are most likely in the CSS classes that replaced its inline styles.
+3. **Check the stream and auth paths by hand:** stop the daemon and confirm the amber STREAM DISCONNECTED banner appears within about 5 s, values grey out and controls lock, and that restarting clears it without a reload. Start with a wrong token and confirm the login overlay shows "Token rejected". Switch to Off and confirm the amber CONTROL OFF banner (not the red failsafe banner). Unplug nothing: to see a fault, there is no switch in the simulator yet.
+4. **Merge `development` into `master`** when it looks right.
+5. **Phase 3 on the Pi** (still the main unverified piece of the project): run against the real boards, confirm the `check_counts()` margin, try `deploy/still.service` and the SIGTERM shutdown, and measure the History queries (see below). Install `widgetlords` there and run without `--simulate`.
+
+**Things deliberately left open:**
+- No floor on the dephlegmator output minimum. Any `0 <= min < max <= 100` is accepted, so a 0% minimum can cut all cooling flow in auto. Decide whether to enforce one.
+- No bumpless hand-back to auto: returning from manual or off starts from the PID's old integral, so the valve can jump. `simple_pid`'s `set_auto_mode(True, last_output=...)` would fix it, but seeding from the valve position also changes startup behavior, so it was skipped.
+- The supply valve has no commanded startup position (see Open items).
+- History rows do not log the output limits, so history points report 0 to 100 for them. Nothing on screen uses that.
+- Performance of the long History queries is only measured on a fast desktop (14 days of 1 s rows: thinned history 0.01 s, events 0.9 s, CSV export 5 s). The Pi will be several times slower; the CSV streams, so only its total time is affected. If events are too slow there, the next step is storing events in their own table as they happen.
+- Events rely on rows being inserted in time order, so a backwards clock step (a Pi booting before it has the time) shows as a logging gap. The oldest retained row can also produce one false "Logging started".
+
+**Where to look:** `CLAUDE.md` (Daemon section) lists the files and their roles; `docs/still-control-frontend-handoff.md` is the front-end spec; `docs/openapi.json` is the API contract (regenerate when the API changes); `README.md` has the endpoint table.
+
+**Testing the front end without a browser:** the earlier sessions used jsdom with a fake `EventSource` to drive the page against a running `still --simulate`. Those scripts lived in a temporary directory and are not in the repository.

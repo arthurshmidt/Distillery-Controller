@@ -55,3 +55,7 @@ New work replacing `original/` with a daemon plus a web GUI; see `PLAN.md` for t
 - **Dev setup:** the system Python is externally managed, so use a venv: `python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"`.
 - **Tests:** `.venv/bin/python -m pytest`. These run entirely against `SimulatedHW` and don't need any hardware.
 - **Testing against real hardware:** only possible on the Pi with the boards attached, running `WidgetlordsHW` (a direct port of the `original/` board access code) instead of `SimulatedHW`. This is phase 3 of `PLAN.md`, once the API (phase 4) is far enough along to drive the controller, or by exercising `WidgetlordsHW` directly the way `original/display_temperatures.py` and `original/testing_cmd_vlv_*.py` were used. Until then, `widgetlords` isn't installed here, and `WidgetlordsHW` raises a clear `RuntimeError` if instantiated off the Pi.
+
+## Picking up where the last session ended
+
+See "Where we left off" at the end of `PLAN.md`. In short: the daemon and the three front-end screens are built and tested, but the front end has never been opened in a real browser. First run `STILL_TOKEN=x .venv/bin/still --simulate`, open http://127.0.0.1:8000/, and check it against the screenshots in `docs/still-control-frontend-handoff.zip`. Work on a new branch from `development`; don't commit to `development` or `master` directly.
