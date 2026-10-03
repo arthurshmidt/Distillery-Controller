@@ -64,7 +64,7 @@ def test_off_mode_forces_failsafe():
     state = controller.tick()
     assert state.valves_pct["dephlegmator"] == FAILSAFE_PERCENT
     assert state.valves_pct["condenser"] == FAILSAFE_PERCENT
-    assert state.fault == "off"
+    assert state.fault is None  # off is a chosen state, not a fault
 
 
 def test_manual_valve_requires_manual_mode():
@@ -257,3 +257,174 @@ def test_manual_supply_valve():
     assert controller.tick().valves_pct["supply"] == 33
     controller.set_mode(Mode.AUTO)
     assert controller.tick().valves_pct["supply"] != 33
+
+
+def test_entering_manual_from_auto_holds_positions():
+    controller, hw, _ = make_controller()
+    for _ in range(3):
+        auto = controller.tick()
+    assert auto.valves_pct["dephlegmator"] < FAILSAFE_PERCENT
+    controller.set_mode(Mode.MANUAL)
+    held = controller.tick()
+    assert held.valves_pct["dephlegmator"] == auto.valves_pct["dephlegmator"]
+    assert held.valves_pct["condenser"] == auto.valves_pct["condenser"]
+    assert held.valves_pct["supply"] == auto.valves_pct["supply"]
+    # and they stay put
+    assert controller.tick().valves_pct == held.valves_pct
+
+
+def test_entering_manual_from_off_holds_failsafe_positions():
+    controller, hw, _ = make_controller()
+    controller.tick()
+    controller.set_mode(Mode.OFF)
+    controller.tick()
+    controller.set_mode(Mode.MANUAL)
+    state = controller.tick()
+    assert state.valves_pct["dephlegmator"] == FAILSAFE_PERCENT
+    assert state.valves_pct["condenser"] == FAILSAFE_PERCENT
+
+
+def test_manual_valve_moves_only_the_one_set():
+    controller, hw, _ = make_controller()
+    for _ in range(3):
+        auto = controller.tick()
+    controller.set_mode(Mode.MANUAL)
+    controller.set_manual_valve("dephlegmator", 42)
+    state = controller.tick()
+    assert state.valves_pct["dephlegmator"] == 42
+    assert state.valves_pct["supply"] == auto.valves_pct["supply"]
+
+
+def test_leaving_manual_then_reentering_reseeds_from_current_positions():
+    controller, hw, _ = make_controller()
+    controller.tick()
+    controller.set_mode(Mode.MANUAL)
+    controller.set_manual_valve("dephlegmator", 42)
+    controller.tick()
+    controller.set_mode(Mode.OFF)
+    controller.tick()
+    controller.set_mode(Mode.MANUAL)
+    assert controller.tick().valves_pct["dephlegmator"] == FAILSAFE_PERCENT
+
+
+def test_output_limits_are_applied_and_reported():
+    controller, hw, config = make_controller()
+    default = tuple(config.profiles["whiskey"].output_limits)
+    assert controller.state().output_limits == default
+    controller.set_output_limits(50, 60)
+    assert controller.state().output_limits == (50, 60)
+    for _ in range(5):
+        deph = controller.tick().valves_pct["dephlegmator"]
+        assert 50 <= deph <= 60
+
+
+def test_supply_output_limits_are_applied_and_reported():
+    controller, hw, config = make_controller()
+    assert controller.state().supply_output_limits == tuple(config.supply.output_limits)
+    controller.set_supply_output_limits(10, 20)
+    assert controller.state().supply_output_limits == (10, 20)
+    for _ in range(5):
+        assert 10 <= controller.tick().valves_pct["supply"] <= 20
+
+
+@pytest.mark.parametrize("low,high", [(50, 50), (60, 50), (-1, 50), (0, 101)])
+def test_invalid_output_limits_are_rejected(low, high):
+    controller, hw, _ = make_controller()
+    before = controller.state().output_limits
+    with pytest.raises(ValueError):
+        controller.set_output_limits(low, high)
+    with pytest.raises(ValueError):
+        controller.set_supply_output_limits(low, high)
+    assert controller.state().output_limits == before
+
+
+def test_output_limits_are_per_profile():
+    controller, hw, config = make_controller("whiskey")
+    controller.set_output_limits(50, 60)
+    controller.set_profile("gin")
+    assert controller.state().output_limits == tuple(config.profiles["gin"].output_limits)
+    controller.set_profile("whiskey")
+    assert controller.state().output_limits == (50, 60)
+
+
+def test_saved_values_are_defaults_with_changes_on_top():
+    controller, hw, config = make_controller()
+    default = config.profiles["whiskey"]
+    saved = controller.saved_profile("whiskey")
+    assert saved["setpoint_f"] == default.setpoint_f
+    assert saved["pid"] == {"p": default.pid.p, "i": default.pid.i, "d": default.pid.d}
+    assert saved["output_limits"] == list(default.output_limits)
+
+    controller.set_setpoint(125.0)
+    controller.set_pid_gains(-2.0, -0.5, 0.1)
+    controller.set_output_limits(35, 95)
+    saved = controller.saved_profile("whiskey")
+    assert saved == {"setpoint_f": 125.0, "pid": {"p": -2.0, "i": -0.5, "d": 0.1}, "output_limits": [35, 95]}
+    assert controller.saved_profile("gin")["setpoint_f"] == config.profiles["gin"].setpoint_f
+
+    controller.set_supply_setpoint(80.0)
+    assert controller.saved_supply()["setpoint_f"] == 80.0
+
+
+def test_set_setpoint_of_an_inactive_profile_leaves_the_active_one_alone():
+    controller, hw, config = make_controller("whiskey")
+    controller.set_profile_setpoint("gin", 118.0)
+    assert controller.state().setpoint_f == config.profiles["whiskey"].setpoint_f
+    assert controller.saved_profile("gin")["setpoint_f"] == 118.0
+    controller.set_profile("gin")
+    assert controller.state().setpoint_f == 118.0
+    with pytest.raises(KeyError):
+        controller.set_profile_setpoint("nope", 100.0)
+
+
+def test_set_setpoint_of_the_active_profile_applies_now():
+    controller, hw, _ = make_controller("whiskey")
+    controller.set_profile_setpoint("whiskey", 127.0)
+    assert controller.state().setpoint_f == 127.0
+
+
+def test_reset_active_profile_applies_defaults_and_keeps_mode():
+    controller, hw, config = make_controller("whiskey")
+    default = config.profiles["whiskey"]
+    controller.set_setpoint(120.0)
+    controller.set_pid_gains(-3.0, -1.0, 0.5)
+    controller.set_output_limits(50, 60)
+    controller.set_mode(Mode.MANUAL)
+    controller.reset_profile("whiskey")
+    s = controller.state()
+    assert s.mode == Mode.MANUAL
+    assert s.setpoint_f == default.setpoint_f
+    assert s.pid_gains == (default.pid.p, default.pid.i, default.pid.d)
+    assert s.output_limits == tuple(default.output_limits)
+    assert controller.saved_profile("whiskey")["setpoint_f"] == default.setpoint_f
+
+
+def test_reset_inactive_profile_does_not_touch_the_running_pid():
+    controller, hw, config = make_controller("whiskey")
+    controller.set_setpoint(125.0)
+    controller.set_profile_setpoint("gin", 111.0)
+    controller.reset_profile("gin")
+    assert controller.state().setpoint_f == 125.0
+    assert controller.saved_profile("gin")["setpoint_f"] == config.profiles["gin"].setpoint_f
+    with pytest.raises(KeyError):
+        controller.reset_profile("nope")
+
+
+def test_reset_supply_restores_defaults():
+    controller, hw, config = make_controller()
+    sup = config.supply
+    controller.set_supply_setpoint(70.0)
+    controller.set_supply_pid_gains(-5.0, -1.0, 0.0)
+    controller.set_supply_output_limits(10, 20)
+    controller.reset_supply()
+    s = controller.state()
+    assert s.supply_setpoint_f == sup.setpoint_f
+    assert s.supply_pid_gains == (sup.pid.p, sup.pid.i, sup.pid.d)
+    assert s.supply_output_limits == tuple(sup.output_limits)
+    for _ in range(3):
+        assert sup.output_limits[0] <= controller.tick().valves_pct["supply"] <= sup.output_limits[1]
+
+
+def test_hardware_kind_is_reported():
+    controller, hw, _ = make_controller()
+    assert controller.hardware_kind == "simulated"

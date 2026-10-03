@@ -148,3 +148,161 @@ def test_old_database_gets_supply_columns(tmp_path):
     assert "supply" not in store.history()[0].state.valves_pct
     store.add_history(time.time() + 1, _state())
     assert len(store.history()) == 2
+
+
+def test_controller_restores_output_limits(config, tmp_path):
+    path = str(tmp_path / "s.db")
+    first = list(config.profiles)[0]
+    c = Controller(SimulatedHW(seed=1), config, profile_name=first, store=Store(path))
+    c.set_output_limits(45, 85)
+    c.set_supply_output_limits(5, 55)
+
+    c2 = Controller(SimulatedHW(seed=1), config, profile_name=first, store=Store(path))
+    assert c2.state().output_limits == (45, 85)
+    assert c2.state().supply_output_limits == (5, 55)
+
+
+def _fill(store, n=100, t0=1000.0, **kw):
+    for i in range(n):
+        store.add_history(t0 + i, _state(supply_setpoint_f=90.0, **kw))
+
+
+def test_history_until_bounds_the_window():
+    store = Store()
+    _fill(store, 10)
+    assert [p.timestamp for p in store.history(until=1003.0)] == [1000.0, 1001.0, 1002.0, 1003.0]
+    assert [p.timestamp for p in store.history(since=1001.0, until=1003.0)] == [1002.0, 1003.0]
+    assert [p.timestamp for p in store.history(until=1003.0, limit=2)] == [1002.0, 1003.0]
+
+
+def test_history_step_keeps_the_earliest_row_per_bucket_in_order():
+    store = Store()
+    _fill(store, 100)
+    pts = store.history(step=10)
+    assert [p.timestamp for p in pts] == [1000.0 + 10 * i for i in range(10)]
+    # buckets are aligned to multiples of step, so an offset window still thins evenly
+    pts = store.history(since=1004.0, step=10)
+    assert [p.timestamp for p in pts] == [1005.0] + [1010.0 + 10 * i for i in range(9)]
+    assert len(store.history(step=1)) == 100
+    assert [p.timestamp for p in store.history(step=10, limit=3)] == [1070.0, 1080.0, 1090.0]
+
+
+def test_history_step_with_a_real_file_uses_the_read_connection(tmp_path):
+    store = Store(str(tmp_path / "s.db"))
+    _fill(store, 30)
+    assert len(store.history(step=10)) == 3
+    store.add_history(2000.0, _state())  # writes still work beside reads
+    assert store.history(limit=1)[0].timestamp == 2000.0
+
+
+def _row(store, t, **kw):
+    store.add_history(t, _state(supply_setpoint_f=kw.pop("ssp", 90.0), **kw))
+
+
+def test_events_for_a_scripted_sequence():
+    store = Store()
+    t = 1000.0
+    for i in range(5):
+        _row(store, t + i)
+    store.add_history(t + 5, ControllerState(
+        mode=Mode.MANUAL, profile="whiskey", setpoint_f=150.0, temps_f=Temperatures(1, 2, 3, 4),
+        supply_setpoint_f=90.0))
+    store.add_history(t + 6, ControllerState(
+        mode=Mode.MANUAL, profile="whiskey", setpoint_f=155.0, temps_f=Temperatures(1, 2, 3, 4),
+        supply_setpoint_f=88.0))
+    store.add_history(t + 7, ControllerState(
+        mode=Mode.MANUAL, profile="gin", setpoint_f=155.0, supply_setpoint_f=88.0, fault="read error: x"))
+    store.add_history(t + 8, ControllerState(
+        mode=Mode.MANUAL, profile="gin", setpoint_f=155.0, supply_setpoint_f=88.0, fault="read error: x"))
+    store.add_history(t + 12, ControllerState(
+        mode=Mode.AUTO, profile="gin", setpoint_f=155.0, temps_f=Temperatures(1, 2, 3, 4), supply_setpoint_f=88.0))
+    # a long silence, then logging resumes
+    _row(store, t + 500)
+
+    events, segments = store.events()
+    summary = [(e["timestamp"] - t, e["kind"], e["text"]) for e in events]
+    assert summary == [
+        (0, "log", "Logging started · auto, whiskey profile"),
+        (5, "mode", "Mode auto → manual"),
+        (6, "setpoint", "Dephlegmator setpoint 150.0 → 155.0 °F"),
+        (6, "setpoint", "Supply setpoint 90.0 → 88.0 °F"),
+        (7, "profile", "Profile whiskey → gin"),
+        (7, "fault", "read error: x"),
+        (12, "mode", "Mode manual → auto"),
+        (12, "fault", "Fault cleared after 5 s"),
+        (12, "log", "Logging stopped"),
+        (500, "log", "Logging started · auto, whiskey profile"),
+    ]
+    tones = {e["text"]: e["tone"] for e in events}
+    assert tones["Mode auto → manual"] == "amber"
+    assert tones["read error: x"] == "red"
+    assert tones["Mode manual → auto"] is None
+
+    kinds = [(s["start"] - t, s["end"] - t, s["kind"]) for s in segments]
+    assert kinds == [(0, 5, "auto"), (5, 7, "manual"), (7, 12, "fault"), (12, 12, "auto"), (500, 500, "auto")]
+
+
+def test_events_see_a_short_fault_even_when_history_is_thinned():
+    store = Store()
+    for i in range(1000):
+        store.add_history(5000.0 + i, _state(fault="boom" if 500 <= i < 503 else None))
+    assert len(store.history(step=100)) == 10
+    events, _ = store.events()
+    assert [e["text"] for e in events if e["kind"] == "fault"] == ["boom", "Fault cleared after 3 s"]
+
+
+def test_events_window_uses_the_previous_row_for_context():
+    store = Store()
+    _fill(store, 5)
+    store.add_history(1005.0, ControllerState(
+        mode=Mode.OFF, profile="whiskey", setpoint_f=150.0, temps_f=Temperatures(1, 2, 3, 4), supply_setpoint_f=90.0))
+    # the window starts at the row after the change: no "logging started" noise before it
+    events, _ = store.events(since=1005.0)
+    assert [(e["kind"], e["text"]) for e in events] == [("mode", "Mode auto → off")]
+    # a window that ends before the change shows nothing but the start
+    events, _ = store.events(since=1001.0, until=1003.0)
+    assert events == []
+
+
+def test_scan_chunks_do_not_drop_or_repeat_rows(monkeypatch):
+    import still.store as st
+
+    monkeypatch.setattr(st, "SCAN_CHUNK", 7)
+    store = Store()
+    _fill(store, 30)
+    rows = list(store.rows_for_export(None, None))
+    assert [r[0] for r in rows] == [1000.0 + i for i in range(30)]
+    assert [r[0] for r in store.rows_for_export(1010.0, 1020.0)] == [1010.0 + i for i in range(11)]
+
+
+def test_thinning_by_seeks_matches_thinning_by_grouping(monkeypatch):
+    import still.store as st
+
+    store = Store()
+    for i in range(500):
+        if 200 <= i < 260:
+            continue  # a logging gap leaves empty buckets
+        store.add_history(1000.0 + i, _state())
+    window = dict(since=1010.0, until=1450.0, step=17.0)
+    by_seeks = [p.timestamp for p in store.history(**window)]
+    monkeypatch.setattr(st, "MAX_SEEK_BUCKETS", 0)
+    by_grouping = [p.timestamp for p in store.history(**window)]
+    assert by_seeks == by_grouping
+    assert len(by_seeks) > 20
+    assert by_seeks == sorted(set(by_seeks))
+
+
+def test_reset_is_saved_and_restored(config, tmp_path):
+    path = str(tmp_path / "s.db")
+    first, second = list(config.profiles)[:2]
+    c = Controller(SimulatedHW(seed=1), config, profile_name=first, store=Store(path))
+    c.set_setpoint(100.0)
+    c.set_profile_setpoint(second, 99.0)
+    c.set_supply_setpoint(70.0)
+    c.reset_profile(first)
+    c.reset_supply()
+
+    c2 = Controller(SimulatedHW(seed=1), config, profile_name=first, store=Store(path))
+    assert c2.saved_profile(first)["setpoint_f"] == config.profiles[first].setpoint_f
+    assert c2.saved_profile(second)["setpoint_f"] == 99.0  # reset only touched the first
+    assert c2.state().supply_setpoint_f == config.supply.setpoint_f

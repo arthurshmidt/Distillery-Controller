@@ -14,13 +14,19 @@ import sqlite3
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from .controller import ControllerState, Mode
 from .hardware.base import Temperatures
 
 DEFAULT_RETENTION_DAYS = 14
 PRUNE_EVERY_S = 3600.0
+
+# Consecutive rows further apart than this mean the daemon was not logging.
+LOG_GAP_S = 60.0
+SCAN_CHUNK = 20000
+MAX_SEEK_BUCKETS = 5000
+MAX_EVENTS = 5000
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS history (
@@ -51,6 +57,11 @@ _COLUMNS = (
     "valve_supply, supply_setpoint_f, supply_term_p, supply_term_i, supply_term_d, "
     "supply_gain_p, supply_gain_i, supply_gain_d"
 )
+_EVENT_COLUMNS = "ts, mode, profile, setpoint_f, supply_setpoint_f, fault"
+_EXPORT_COLUMNS = (
+    "ts, mode, profile, setpoint_f, deph_supply, deph_return, cond_supply, cond_return, "
+    "valve_deph, valve_cond, valve_supply, supply_setpoint_f, fault"
+)
 # Columns added after the first release; older database files get them on open.
 _ADDED_COLUMNS = (
     "valve_supply", "supply_setpoint_f", "supply_term_p", "supply_term_i", "supply_term_d",
@@ -70,6 +81,13 @@ class Store:
         self._retention_s = retention_days * 86400
         self._last_prune = 0.0
         self._db = sqlite3.connect(path, check_same_thread=False)
+        # Long history reads use their own connection (WAL lets them run beside
+        # writes) so a 14-day scan never holds up the control thread's insert.
+        if path == ":memory:":
+            self._rdb, self._rlock = self._db, self._lock
+        else:
+            self._rdb = None  # opened below, once the schema exists
+            self._rlock = threading.Lock()
         with self._lock:
             if path != ":memory:":
                 self._db.execute("PRAGMA journal_mode=WAL")
@@ -80,11 +98,20 @@ class Store:
                 if column not in have:
                     self._db.execute(f"ALTER TABLE history ADD COLUMN {column} REAL")
             self._db.commit()
+        if self._rdb is None:
+            self._rdb = sqlite3.connect(path, check_same_thread=False)
         self.prune()
+
+    @property
+    def retention_days(self) -> float:
+        return self._retention_s / 86400
 
     def close(self) -> None:
         with self._lock:
             self._db.close()
+        if self._rdb is not self._db:
+            with self._rlock:
+                self._rdb.close()
 
     # -- history -----------------------------------------------------------
 
@@ -104,22 +131,152 @@ class Store:
         if timestamp - self._last_prune > PRUNE_EVERY_S:
             self.prune(now=timestamp)
 
-    def history(self, since: Optional[float] = None, limit: Optional[int] = None) -> List[HistoryPoint]:
-        """Points after `since`, oldest first; with `limit`, the newest `limit` of them."""
+    def history(
+        self,
+        since: Optional[float] = None,
+        limit: Optional[int] = None,
+        until: Optional[float] = None,
+        step: Optional[float] = None,
+    ) -> List[HistoryPoint]:
+        """Points with `since` < time <= `until`, oldest first. With `step`
+        (seconds), at most one point per step-second bucket, the earliest in
+        it. With `limit`, the newest `limit` of what remains."""
         if limit is not None and limit <= 0:
             return []
-        sql = f"SELECT {_COLUMNS} FROM history"
-        args: List[Any] = []
-        if since is not None:
-            sql += " WHERE ts > ?"
-            args.append(since)
+        where, args = _window(since, until, inclusive_since=False)
+        if step is not None and step > 0:
+            rows = self._thinned_rows(since, until, float(step))
+            if limit is not None:
+                rows = rows[-limit:]
+            return [_point(r) for r in rows]
+        sql = f"SELECT {_COLUMNS} FROM history{where}"
         sql += " ORDER BY ts DESC"
         if limit is not None:
             sql += " LIMIT ?"
             args.append(limit)
-        with self._lock:
-            rows = self._db.execute(sql, args).fetchall()
+        with self._rlock:
+            rows = self._rdb.execute(sql, args).fetchall()
         return [_point(r) for r in reversed(rows)]
+
+    def _thinned_rows(self, since: Optional[float], until: Optional[float], step: float) -> List[tuple]:
+        """The earliest row of each step-second bucket (buckets are multiples
+        of `step`), oldest first. With both bounds known and a modest number of
+        buckets this is one index seek per bucket, which stays fast over 14
+        days of one-second rows; otherwise one pass groups the whole window."""
+        where, args = _window(since, until, inclusive_since=False)
+        if since is not None and until is not None and (until - since) / step <= MAX_SEEK_BUCKETS:
+            first = int(since // step)
+            last = int(until // step)
+            sql = f"SELECT {_COLUMNS} FROM history WHERE ts >= ? AND ts < ? AND ts > ? AND ts <= ? ORDER BY ts LIMIT 1"
+            rows = []
+            with self._rlock:
+                for k in range(first, last + 1):
+                    r = self._rdb.execute(sql, (k * step, (k + 1) * step, since, until)).fetchone()
+                    if r is not None:
+                        rows.append(r)
+            return rows
+        # Bare columns beside MIN() come from the row that holds the minimum.
+        sql = f"SELECT {_COLUMNS}, MIN(ts) FROM history{where} GROUP BY CAST(ts / ? AS INTEGER) ORDER BY ts"
+        with self._rlock:
+            return self._rdb.execute(sql, args + [step]).fetchall()
+
+    def _scan(self, columns: str, since: Optional[float], until: Optional[float]) -> Iterator[tuple]:
+        """Every row with `since` <= time <= `until`, oldest first, read in
+        chunks so the lock is never held for long and memory stays small."""
+        last = None
+        while True:
+            where, args = _window(since, until, inclusive_since=True)
+            if last is not None:
+                where = (where + " AND" if where else " WHERE") + " ts > ?"
+                args.append(last)
+            with self._rlock:
+                rows = self._rdb.execute(
+                    f"SELECT {columns} FROM history{where} ORDER BY ts LIMIT {SCAN_CHUNK}", args
+                ).fetchall()
+            yield from rows
+            if len(rows) < SCAN_CHUNK:
+                return
+            last = rows[-1][0]
+
+    def rows_for_export(self, since: Optional[float], until: Optional[float]) -> Iterator[tuple]:
+        """Full-resolution rows for the CSV export: (ts, mode, profile,
+        setpoint_f, deph_supply, deph_return, cond_supply, cond_return,
+        valve_deph, valve_cond, valve_supply, supply_setpoint_f, fault)."""
+        return self._scan(_EXPORT_COLUMNS, since, until)
+
+    def events(self, since: Optional[float] = None, until: Optional[float] = None) -> Tuple[List[dict], List[dict]]:
+        """Changes found by comparing consecutive full-resolution rows, plus
+        the mode/fault segments for the timeline. Gaps in logging leave
+        segments out. Returns (events oldest first, segments).
+
+        SQLite does the comparing (each row joined to the one logged just before
+        it, by rowid) and returns only the rows where something changed, so a
+        14-day window is not pulled into Python."""
+        with self._rlock:
+            first_ts, last_ts = self._rdb.execute(
+                "SELECT MIN(ts), MAX(ts) FROM history WHERE ts >= ? AND ts <= ?",
+                (-1e18 if since is None else since, 1e18 if until is None else until),
+            ).fetchone()
+            if first_ts is None:
+                return [], []
+            rows = self._rdb.execute(
+                f"""
+                SELECT a.ts, a.mode, a.profile, a.setpoint_f, a.supply_setpoint_f, a.fault,
+                       b.ts, b.mode, b.profile, b.setpoint_f, b.supply_setpoint_f, b.fault
+                FROM history a LEFT JOIN history b ON b.rowid = a.rowid - 1
+                WHERE a.ts >= ? AND a.ts <= ?
+                  AND (a.ts = ? OR b.ts IS NULL OR ABS(a.ts - b.ts) > {LOG_GAP_S}
+                       OR a.mode != b.mode OR a.profile != b.profile OR a.setpoint_f != b.setpoint_f
+                       OR a.supply_setpoint_f IS NOT b.supply_setpoint_f
+                       OR (a.fault IS NULL) != (b.fault IS NULL))
+                ORDER BY a.ts
+                """,
+                (first_ts, last_ts, first_ts),
+            ).fetchall()
+
+        events: List[dict] = []
+        segments: List[dict] = []
+        fault_start: Optional[float] = None
+        seg: Optional[dict] = None
+
+        def add(t, kind, text, tone=None):
+            events.append({"timestamp": t, "kind": kind, "text": text, "tone": tone})
+
+        for r in rows:
+            t, mode, profile, sp, ssp, fault, pts, pmode, pprofile, psp, pssp, pfault = r
+            key = "fault" if fault else mode
+            if pts is None or abs(t - pts) > LOG_GAP_S:
+                if pts is not None and pts >= first_ts:
+                    add(pts, "log", "Logging stopped")
+                add(t, "log", f"Logging started \u00b7 {mode}, {profile} profile")
+                if seg is not None:
+                    seg["end"] = pts if pts is not None else seg["end"]
+                seg = None
+                fault_start = t if fault else None
+            else:
+                if mode != pmode:
+                    add(t, "mode", f"Mode {pmode} \u2192 {mode}", None if mode == "auto" else "amber")
+                if profile != pprofile:
+                    add(t, "profile", f"Profile {pprofile} \u2192 {profile}")
+                if sp != psp:
+                    add(t, "setpoint", f"Dephlegmator setpoint {psp:.1f} \u2192 {sp:.1f} \u00b0F")
+                if ssp != pssp and ssp is not None and pssp is not None:
+                    add(t, "setpoint", f"Supply setpoint {pssp:.1f} \u2192 {ssp:.1f} \u00b0F")
+                if fault and not pfault:
+                    fault_start = t
+                    add(t, "fault", fault, "red")
+                elif pfault and not fault:
+                    add(t, "fault", "Fault cleared" if fault_start is None else f"Fault cleared after {int(t - fault_start)} s")
+                    fault_start = None
+            if seg is not None and seg["kind"] == key:
+                continue
+            if seg is not None:
+                seg["end"] = t  # touching segments share the boundary
+            seg = {"start": t, "end": t, "kind": key}
+            segments.append(seg)
+        if seg is not None:
+            seg["end"] = last_ts
+        return events[-MAX_EVENTS:], segments
 
     def prune(self, now: Optional[float] = None) -> None:
         now = time.time() if now is None else now
@@ -169,3 +326,14 @@ def _point(r: tuple) -> HistoryPoint:
         fault=r[16],
     )
     return HistoryPoint(r[0], state)
+
+
+def _window(since: Optional[float], until: Optional[float], inclusive_since: bool) -> Tuple[str, List[Any]]:
+    clauses, args = [], []
+    if since is not None:
+        clauses.append("ts >= ?" if inclusive_since else "ts > ?")
+        args.append(since)
+    if until is not None:
+        clauses.append("ts <= ?")
+        args.append(until)
+    return (" WHERE " + " AND ".join(clauses) if clauses else ""), args

@@ -26,6 +26,8 @@ class Temperatures:
 class HardwareInterface(ABC):
     """What the controller needs from the still hardware."""
 
+    kind = "unknown"  # reported by /api/info: "simulated" or "widgetlords"
+
     @abstractmethod
     def read_temperatures(self) -> Temperatures:
         """Read and convert all four thermistor channels, in Fahrenheit."""
