@@ -58,4 +58,4 @@ New work replacing `original/` with a daemon plus a web GUI; see `PLAN.md` for t
 
 ## Picking up where the last session ended
 
-See "Where we left off" at the end of `PLAN.md`. In short: the daemon and the three front-end screens are built and tested, but the front end has never been opened in a real browser. First run `STILL_TOKEN=x .venv/bin/still --simulate`, open http://127.0.0.1:8000/, and check it against the screenshots in `docs/still-control-frontend-handoff.zip`. Work on a new branch from `development`; don't commit to `development` or `master` directly.
+See "Where we left off" at the end of `PLAN.md`. In short: the front end has now been checked in a real browser at desktop and tablet widths, and the stream/auth paths are verified by hand — both look right. Still open: phone width (~390px, blocked so far by the dev machine's tiling window manager) and Phase 3 on the Pi, the main remaining unverified piece. Work on a new branch from `development`; don't commit to `development` or `master` directly.
