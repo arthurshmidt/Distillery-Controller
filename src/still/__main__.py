@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import signal
 import sys
 
 import uvicorn
@@ -44,11 +45,25 @@ def main(argv=None) -> int:
     app = create_app(controller, loop, config, token)
 
     loop.start()
+    # Once its own shutdown finishes, uvicorn restores whichever SIGTERM handler
+    # was installed before run() and re-raises the signal through it (so a
+    # process supervisor sees the expected exit status). With no handler
+    # installed that is the OS default of terminating the process immediately,
+    # which happens inside uvicorn.run() and skips the `finally` below (and so
+    # the valve failsafe) entirely. A no-op handler makes the re-raise harmless
+    # and lets uvicorn.run() return normally instead. SIGINT doesn't need this:
+    # Python's default handler there raises KeyboardInterrupt, which already
+    # propagates out of uvicorn.run() as a normal return.
+    signal.signal(signal.SIGTERM, lambda *_: None)
     try:
-        uvicorn.run(app, host=args.host, port=args.port)
+        # The SSE stream (/api/stream) only ends when its client disconnects, so on
+        # SIGTERM uvicorn would otherwise wait forever for it and never reach the
+        # `finally` below. Cap the wait well under deploy/still.service's
+        # TimeoutStopSec=15, which would otherwise SIGKILL us first and skip the
+        # valve failsafe entirely.
+        uvicorn.run(app, host=args.host, port=args.port, timeout_graceful_shutdown=5)
     finally:
-        # uvicorn turns SIGTERM/SIGINT into a normal return, so systemd stop
-        # lands here. Each step is guarded so a failure in one cannot skip the rest.
+        # Each step is guarded so a failure in one cannot skip the rest.
         logger.info("shutting down, opening valves")
         for step in (loop.stop, hw.close, store.close):
             try:
