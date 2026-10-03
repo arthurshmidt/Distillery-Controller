@@ -19,7 +19,7 @@ from typing import AsyncIterator, Dict, List, Optional
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .controller import Controller, ControllerState, Mode
 from .config import AppConfig
@@ -66,6 +66,8 @@ class StateModel(BaseModel):
     supply_setpoint_f: float = Field(description="supply (city water) valve loop setpoint")
     supply_pid_terms: PidTermsModel
     supply_pid_gains: PidGainsModel
+    output_limits: List[float] = Field(description="[min, max] percent the dephlegmator PID may command; history points report 0-100 because limits are not logged")
+    supply_output_limits: List[float] = Field(description="[min, max] percent the supply PID may command")
     fault: Optional[str] = Field(None, description="reason the failsafe is active, else null")
 
 
@@ -106,6 +108,17 @@ class PidRequest(PidGainsModel):
     pass
 
 
+class OutputLimitsRequest(BaseModel):
+    min: float = Field(ge=0, le=100)
+    max: float = Field(ge=0, le=100)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "OutputLimitsRequest":
+        if self.min >= self.max:
+            raise ValueError("min must be below max")
+        return self
+
+
 def state_model(s: ControllerState) -> StateModel:
     return StateModel(
         mode=s.mode,
@@ -122,6 +135,8 @@ def state_model(s: ControllerState) -> StateModel:
         supply_pid_gains=PidGainsModel(
             p=s.supply_pid_gains[0], i=s.supply_pid_gains[1], d=s.supply_pid_gains[2]
         ),
+        output_limits=list(s.output_limits),
+        supply_output_limits=list(s.supply_output_limits),
         fault=s.fault,
     )
 
@@ -219,6 +234,17 @@ def create_app(
     @api.put("/pid", response_model=StateModel)
     def put_pid(body: PidRequest) -> StateModel:
         controller.set_pid_gains(body.p, body.i, body.d)
+        return state_model(controller.state())
+
+    @api.put("/output-limits", response_model=StateModel)
+    def put_output_limits(body: OutputLimitsRequest) -> StateModel:
+        """Limits for the active profile's dephlegmator PID. Manual moves are not limited."""
+        controller.set_output_limits(body.min, body.max)
+        return state_model(controller.state())
+
+    @api.put("/supply/output-limits", response_model=StateModel)
+    def put_supply_output_limits(body: OutputLimitsRequest) -> StateModel:
+        controller.set_supply_output_limits(body.min, body.max)
         return state_model(controller.state())
 
     @api.put("/supply/setpoint", response_model=StateModel)

@@ -94,22 +94,13 @@ function chipInfo(name, m) {
   return [name === 'cond' ? 'HELD 100%' : 'PID', 'chip'];
 }
 
-function activeLimits() {
-  if (!store.profiles || !store.state) return null;
-  const p = store.profiles.profiles.find((x) => x.name === store.state.profile);
-  return p ? p.output_limits : null;
-}
-
 function hintInfo(name, m) {
   if (name === 'sup' && m.supplyV == null) return 'Not commanded yet';
   if (m.fault) return name === 'sup' ? 'Failsafe: holding last position' : 'Failsafe: 100%, full flow';
   if (m.mode === 'off') return name === 'sup' ? 'Off: holding last position' : 'Off: 100%, full flow';
   if (m.mode === 'manual') return 'Manual: drag to set';
-  if (name === 'deph') {
-    const l = activeLimits();
-    return l ? `PID output, limits ${l[0]}–${l[1]}%` : 'PID output';
-  }
-  if (name === 'sup') return 'PID output';
+  if (name === 'deph') return `PID output, limits ${m.s.output_limits[0]}–${m.s.output_limits[1]}%`;
+  if (name === 'sup') return `PID output, limits ${m.s.supply_output_limits[0]}–${m.s.supply_output_limits[1]}%`;
   return 'Auto: held at 100%';
 }
 
@@ -258,18 +249,17 @@ function renderAdvanced(m) {
   if (ui.tab !== 'adv') return;
   const s = m.s;
   const loops = {
-    deph: s && { g: s.pid_gains, t: s.pid_terms, valve: m.v.dephlegmator },
-    sup: s && { g: s.supply_pid_gains, t: s.supply_pid_terms, valve: m.supplyV },
+    deph: s && { g: s.pid_gains, lim: s.output_limits, t: s.pid_terms, valve: m.v.dephlegmator },
+    sup: s && { g: s.supply_pid_gains, lim: s.supply_output_limits, t: s.supply_pid_terms, valve: m.supplyV },
   };
   for (const [key, L] of Object.entries(loops)) {
     const box = $(`.pidbox[data-loop="${key}"]`);
     if (!L) continue;
     for (const inp of $$('input[data-g]', box)) {
-      if (draft[key] == null && document.activeElement !== inp) inp.value = String(L.g[inp.dataset.g]);
+      if (draft[key] == null && document.activeElement !== inp) inp.value = String(savedValue(L, inp.dataset.g));
       inp.disabled = m.lost;
     }
-    const nums = draft[key] ? ['p', 'i', 'd'].map((g) => (draft[key][g].trim() === '' ? NaN : Number(draft[key][g]))) : [];
-    const bad = nums.some((x) => !isFinite(x));
+    const bad = !!draft[key] && draftError(draft[key]);
     $('[data-f="warn"]', box).hidden = !bad;
     $('[data-f="apply"]', box).disabled = !draft[key] || bad || m.lost;
     const zero = m.fault ? [0, 0, 0] : [L.t.p, L.t.i, L.t.d];
@@ -280,8 +270,14 @@ function renderAdvanced(m) {
   }
   const prof = $('.pidbox[data-loop="deph"] [data-f="profile"]');
   prof.textContent = s ? s.profile[0].toUpperCase() + s.profile.slice(1) + ' profile' : '';
-  const l = activeLimits();
-  $('.pidbox[data-loop="deph"] [data-f="limits"]').textContent = l ? `${l[0]}–${l[1]}%` : '—';
+}
+
+const savedValue = (L, g) => (g === 'lo' ? L.lim[0] : g === 'hi' ? L.lim[1] : L.g[g]);
+
+// True when a gain is not a number or the limits are not 0 <= min < max <= 100.
+function draftError(d) {
+  const n = ['p', 'i', 'd', 'lo', 'hi'].map((g) => (String(d[g]).trim() === '' ? NaN : Number(d[g])));
+  return n.some((x) => !isFinite(x)) || n[3] < 0 || n[4] > 100 || n[3] >= n[4];
 }
 
 // -- confirm dialog ----------------------------------------------------------
@@ -414,9 +410,18 @@ export function init() {
     $('[data-f="apply"]', box).addEventListener('click', async () => {
       const d = draft[key];
       if (!d) return;
-      const body = { p: Number(d.p), i: Number(d.i), d: Number(d.d) };
+      if (draftError(d)) return;
+      const s = store.state;
+      const saved = key === 'deph' ? { g: s.pid_gains, lim: s.output_limits } : { g: s.supply_pid_gains, lim: s.supply_output_limits };
+      const gains = { p: Number(d.p), i: Number(d.i), d: Number(d.d) };
+      const limits = { min: Number(d.lo), max: Number(d.hi) };
+      const gainsChanged = ['p', 'i', 'd'].some((g) => gains[g] !== saved.g[g]);
+      const limitsChanged = limits.min !== saved.lim[0] || limits.max !== saved.lim[1];
       draft[key] = null;
-      await command(() => put(key === 'deph' ? '/api/pid' : '/api/supply/pid', body));
+      const base = key === 'deph' ? '/api' : '/api/supply';
+      if (gainsChanged) await command(() => put(base + '/pid', gains));
+      if (limitsChanged) await command(() => put(base + '/output-limits', limits));
+      render();
     });
   }
 }

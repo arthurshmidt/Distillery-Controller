@@ -513,6 +513,119 @@
         }
       }
     },
+    "/api/output-limits": {
+      "put": {
+        "summary": "Put Output Limits",
+        "description": "Limits for the active profile's dephlegmator PID. Manual moves are not limited.",
+        "operationId": "put_output_limits_api_output_limits_put",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutputLimitsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supply/output-limits": {
+      "put": {
+        "summary": "Put Supply Output Limits",
+        "operationId": "put_supply_output_limits_api_supply_output_limits_put",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutputLimitsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/supply/setpoint": {
       "put": {
         "summary": "Put Supply Setpoint",
@@ -679,6 +792,28 @@
           "mode"
         ],
         "title": "ModeRequest"
+      },
+      "OutputLimitsRequest": {
+        "properties": {
+          "min": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Min"
+          },
+          "max": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Max"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min",
+          "max"
+        ],
+        "title": "OutputLimitsRequest"
       },
       "PidGainsModel": {
         "properties": {
@@ -877,6 +1012,22 @@
           "supply_pid_gains": {
             "$ref": "#/components/schemas/PidGainsModel"
           },
+          "output_limits": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Output Limits",
+            "description": "[min, max] percent the dephlegmator PID may command; history points report 0-100 because limits are not logged"
+          },
+          "supply_output_limits": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Supply Output Limits",
+            "description": "[min, max] percent the supply PID may command"
+          },
           "fault": {
             "anyOf": [
               {
@@ -900,7 +1051,9 @@
           "pid_gains",
           "supply_setpoint_f",
           "supply_pid_terms",
-          "supply_pid_gains"
+          "supply_pid_gains",
+          "output_limits",
+          "supply_output_limits"
         ],
         "title": "StateModel"
       },

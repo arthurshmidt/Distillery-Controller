@@ -182,16 +182,17 @@
         <div class="field"><label class="lbl" for="pid-i">I GAIN</label><input id="pid-i" data-g="i" type="number" step="0.01" inputmode="decimal"></div>
         <div class="field"><label class="lbl" for="pid-d">D GAIN</label><input id="pid-d" data-g="d" type="number" step="0.01" inputmode="decimal"></div>
       </div>
-      <div class="row wrap" style="justify-content: space-between">
-        <span class="warn" data-f="warn" role="alert" hidden>Gains must be numbers.</span>
-        <button type="button" class="btn btn-solid" data-f="apply" style="margin-left: auto; min-width: 140px">APPLY</button>
+      <div class="grid3">
+        <div class="field"><label class="lbl" for="pid-lo">OUTPUT MIN %</label><input id="pid-lo" data-g="lo" type="number" step="1" min="0" max="100" inputmode="decimal"></div>
+        <div class="field"><label class="lbl" for="pid-hi">OUTPUT MAX %</label><input id="pid-hi" data-g="hi" type="number" step="1" min="0" max="100" inputmode="decimal"></div>
+        <button type="button" class="btn btn-solid" data-f="apply">APPLY</button>
       </div>
+      <div class="warn" data-f="warn" role="alert" hidden>Output min must be below max, both between 0 and 100. Gains must be numbers.</div>
       <div class="terms">
         <span>P term <b class="val" data-f="tp">—</b></span>
         <span>I term <b class="val" data-f="ti">—</b></span>
         <span>D term <b class="val" data-f="td">—</b></span>
         <span>Valve <b class="val" data-f="valve">—</b></span>
-        <span>Output limits <b class="val" data-f="limits">—</b></span>
       </div>
     </div>
 
@@ -202,10 +203,12 @@
         <div class="field"><label class="lbl" for="spid-i">I GAIN</label><input id="spid-i" data-g="i" type="number" step="0.01" inputmode="decimal"></div>
         <div class="field"><label class="lbl" for="spid-d">D GAIN</label><input id="spid-d" data-g="d" type="number" step="0.01" inputmode="decimal"></div>
       </div>
-      <div class="row wrap" style="justify-content: space-between">
-        <span class="warn" data-f="warn" role="alert" hidden>Gains must be numbers.</span>
-        <button type="button" class="btn btn-solid" data-f="apply" style="margin-left: auto; min-width: 140px">APPLY</button>
+      <div class="grid3">
+        <div class="field"><label class="lbl" for="spid-lo">OUTPUT MIN %</label><input id="spid-lo" data-g="lo" type="number" step="1" min="0" max="100" inputmode="decimal"></div>
+        <div class="field"><label class="lbl" for="spid-hi">OUTPUT MAX %</label><input id="spid-hi" data-g="hi" type="number" step="1" min="0" max="100" inputmode="decimal"></div>
+        <button type="button" class="btn btn-solid" data-f="apply">APPLY</button>
       </div>
+      <div class="warn" data-f="warn" role="alert" hidden>Output min must be below max, both between 0 and 100. Gains must be numbers.</div>
       <div class="terms">
         <span>P term <b class="val" data-f="tp">—</b></span>
         <span>I term <b class="val" data-f="ti">—</b></span>

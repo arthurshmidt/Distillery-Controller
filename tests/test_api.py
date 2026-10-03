@@ -151,3 +151,35 @@ def test_serves_front_end_without_token(env):
     assert client.get("/api/state").status_code == 401
     assert client.get("/api/state", headers=AUTH).status_code == 200
     assert client.get("/openapi.json").status_code == 200
+
+
+def test_output_limits_endpoints(env):
+    client, controller, _ = env
+    body = client.get("/api/state", headers=AUTH).json()
+    assert body["output_limits"] == [30, 100]
+    assert body["supply_output_limits"] == [0, 60]
+
+    r = client.put("/api/output-limits", json={"min": 40, "max": 90}, headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["output_limits"] == [40, 90]
+    r = client.put("/api/supply/output-limits", json={"min": 5, "max": 50}, headers=AUTH)
+    assert r.json()["supply_output_limits"] == [5, 50]
+
+
+@pytest.mark.parametrize("body", [
+    {"min": 50, "max": 50}, {"min": 60, "max": 40}, {"min": -1, "max": 50}, {"min": 0, "max": 101}, {"min": 10},
+])
+def test_output_limits_validation(env, body):
+    client, controller, _ = env
+    for path in ("/api/output-limits", "/api/supply/output-limits"):
+        assert client.put(path, json=body, headers=AUTH).status_code == 422
+    assert client.put("/api/output-limits", json={"min": 1, "max": 2}).status_code == 401
+
+
+def test_manual_mode_holds_positions_over_api(env):
+    client, controller, _ = env
+    for _ in range(3):
+        auto = controller.tick()
+    client.put("/api/mode", json={"mode": "manual"}, headers=AUTH)
+    state = controller.tick()
+    assert state.valves_pct == auto.valves_pct

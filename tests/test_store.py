@@ -148,3 +148,15 @@ def test_old_database_gets_supply_columns(tmp_path):
     assert "supply" not in store.history()[0].state.valves_pct
     store.add_history(time.time() + 1, _state())
     assert len(store.history()) == 2
+
+
+def test_controller_restores_output_limits(config, tmp_path):
+    path = str(tmp_path / "s.db")
+    first = list(config.profiles)[0]
+    c = Controller(SimulatedHW(seed=1), config, profile_name=first, store=Store(path))
+    c.set_output_limits(45, 85)
+    c.set_supply_output_limits(5, 55)
+
+    c2 = Controller(SimulatedHW(seed=1), config, profile_name=first, store=Store(path))
+    assert c2.state().output_limits == (45, 85)
+    assert c2.state().supply_output_limits == (5, 55)

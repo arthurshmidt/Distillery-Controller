@@ -14,7 +14,7 @@ City water feeds a **water bath** through the **supply valve**. The bath also re
 - **Profiles:** `whiskey` and `gin` each carry their own setpoint, PID gains and valve limits (`config/still.yaml`). The active profile is chosen from the GUI.
 - **Modes:**
   - `auto`: the PID runs.
-  - `manual`: the operator sets the valve positions.
+  - `manual`: the operator sets the valve positions. Entering manual holds every valve where it was last commanded (from auto, the PID's last output; from off, 100%), and a valve moves only when the operator sets it. Manual moves are not limited by the PID output limits.
   - `off`: the dephlegmator and condenser valves open; the supply valve holds its last position.
 - **Failsafe:** the dephlegmator and condenser valves fully open. The supply valve is not moved: it holds its last position (it is not commanded at all until the first auto tick after startup). It is applied in `off` mode (not reported as a fault), on shutdown, and when a fault is detected: a sensor read error, an out-of-range or NaN temperature, or a valve write error. The reason for a fault is reported in the `fault` field of the state.
 - **Sensor check:** raw ADC counts within 10 counts of either end of the range are treated as an open or shorted thermistor. The 10-count margin is an estimate and still needs checking on the Pi.
@@ -98,7 +98,7 @@ All `/api` routes require the token as `Authorization: Bearer <token>`. The SSE 
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/state` | temperatures, valve %, setpoints, mode, profile, PID terms and gains (dephlegmator and supply), fault; `valves_pct.supply` is absent until it is first commanded |
+| `GET /api/state` | temperatures, valve %, setpoints, mode, profile, PID terms, gains and output limits (dephlegmator and supply), fault; `valves_pct.supply` is absent until it is first commanded |
 | `GET /api/stream` | server-sent events: the full state once a second |
 | `GET /api/history` | logged states; `since` (unix time) and `limit` (default 7200, newest kept) |
 | `GET /api/profiles` | list profiles and the active one |
@@ -107,6 +107,8 @@ All `/api` routes require the token as `Authorization: Bearer <token>`. The SSE 
 | `PUT /api/mode` | `{"mode": "auto" \| "manual" \| "off"}` |
 | `PUT /api/valves/{name}` | `{"percent": 0-100}` for `dephlegmator`, `condenser` or `supply`; manual mode only, otherwise 409 |
 | `PUT /api/pid` | `{"p": ..., "i": ..., "d": ...}` for the dephlegmator |
+| `PUT /api/output-limits` | `{"min": ..., "max": ...}` PID output limits for the active profile; `0 <= min < max <= 100`, otherwise 422; saved per profile |
+| `PUT /api/supply/output-limits` | same, for the supply loop |
 | `PUT /api/supply/setpoint` | `{"setpoint_f": ...}` for the supply loop |
 | `PUT /api/supply/pid` | `{"p": ..., "i": ..., "d": ...}` for the supply loop |
 
@@ -123,7 +125,7 @@ The tests run entirely against `SimulatedHW` and need no hardware.
 Phases 1, 2, 4, 5 and 6 of [`PLAN.md`](PLAN.md) are done. Still to do:
 
 - **Phase 3:** verify against the real boards on the Pi, including the sensor-check margin and the systemd shutdown.
-- **Phase 7:** the web front end, designed in Claude Design (see [`docs/still-control-frontend-handoff.md`](docs/still-control-frontend-handoff.md)). The dashboard is built and served at `/` from `src/still/static/` (no token needed to load it; the page asks for the token). The History and Settings screens are placeholders, and the daemon changes B2 to B8 in the handoff are still to do.
+- **Phase 7:** the web front end, designed in Claude Design (see [`docs/still-control-frontend-handoff.md`](docs/still-control-frontend-handoff.md)). The dashboard is built and served at `/` from `src/still/static/` (no token needed to load it; the page asks for the token). The History and Settings screens are placeholders, B2 and B3 of the daemon changes in the handoff are done; B4 to B8 are still to do.
 
 ## Safety
 
