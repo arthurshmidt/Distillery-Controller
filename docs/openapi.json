@@ -120,6 +120,43 @@
             "description": "only points after this unix time"
           },
           {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "only points at or before this unix time",
+              "title": "Until"
+            },
+            "description": "only points at or before this unix time"
+          },
+          {
+            "name": "step",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "seconds; at most one point per step-second bucket (the earliest in it)",
+              "title": "Step"
+            },
+            "description": "seconds; at most one point per step-second bucket (the earliest in it)"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -178,6 +215,170 @@
         }
       }
     },
+    "/api/events": {
+      "get": {
+        "summary": "Get Events",
+        "description": "Mode, profile, setpoint and fault changes and logging gaps, found in the\nfull-resolution rows (thinning in /history does not hide them), plus the\nmode/fault segments for the timeline.",
+        "operationId": "get_events_api_events_get",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix time, inclusive",
+              "title": "Since"
+            },
+            "description": "unix time, inclusive"
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix time, inclusive",
+              "title": "Until"
+            },
+            "description": "unix time, inclusive"
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/history.csv": {
+      "get": {
+        "summary": "Get History Csv",
+        "description": "Every logged row in the window, full resolution. Send the token in the\nAuthorization header; a plain link cannot.",
+        "operationId": "get_history_csv_api_history_csv_get",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix time, inclusive",
+              "title": "Since"
+            },
+            "description": "unix time, inclusive"
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "unix time, inclusive",
+              "title": "Until"
+            },
+            "description": "unix time, inclusive"
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/profiles": {
       "get": {
         "summary": "Get Profiles",
@@ -207,6 +408,220 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProfilesModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/info": {
+      "get": {
+        "summary": "Get Info",
+        "operationId": "get_info_api_info_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{name}/setpoint": {
+      "put": {
+        "summary": "Put Profile Setpoint",
+        "description": "Save a profile's setpoint, whether or not it is the active one.",
+        "operationId": "put_profile_setpoint_api_profiles__name__setpoint_put",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetpointRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{name}/overrides": {
+      "delete": {
+        "summary": "Delete Profile Overrides",
+        "description": "Forget a profile's saved setpoint, gains and limits (back to still.yaml).",
+        "operationId": "delete_profile_overrides_api_profiles__name__overrides_delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supply/overrides": {
+      "delete": {
+        "summary": "Delete Supply Overrides",
+        "operationId": "delete_supply_overrides_api_supply_overrides_delete",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
                 }
               }
             }
@@ -513,6 +928,119 @@
         }
       }
     },
+    "/api/output-limits": {
+      "put": {
+        "summary": "Put Output Limits",
+        "description": "Limits for the active profile's dephlegmator PID. Manual moves are not limited.",
+        "operationId": "put_output_limits_api_output_limits_put",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutputLimitsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supply/output-limits": {
+      "put": {
+        "summary": "Put Supply Output Limits",
+        "operationId": "put_supply_output_limits_api_supply_output_limits_put",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutputLimitsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/supply/setpoint": {
       "put": {
         "summary": "Put Supply Setpoint",
@@ -628,6 +1156,92 @@
   },
   "components": {
     "schemas": {
+      "ChannelsModel": {
+        "properties": {
+          "ai": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Ai"
+          },
+          "ao": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Ao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ai",
+          "ao"
+        ],
+        "title": "ChannelsModel"
+      },
+      "EventModel": {
+        "properties": {
+          "timestamp": {
+            "type": "number",
+            "title": "Timestamp"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "mode, profile, setpoint, fault or log"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone",
+            "description": "amber for a move away from auto, red for a fault, else null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "kind",
+          "text"
+        ],
+        "title": "EventModel"
+      },
+      "EventsModel": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventModel"
+            },
+            "type": "array",
+            "title": "Events",
+            "description": "oldest first"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/SegmentModel"
+            },
+            "type": "array",
+            "title": "Segments",
+            "description": "timeline of mode and faults; stretches where nothing was logged are left out"
+          }
+        },
+        "type": "object",
+        "required": [
+          "events",
+          "segments"
+        ],
+        "title": "EventsModel"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -659,6 +1273,56 @@
         ],
         "title": "HistoryPointModel"
       },
+      "InfoModel": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "hardware": {
+            "type": "string",
+            "title": "Hardware",
+            "description": "simulated or widgetlords"
+          },
+          "interval_s": {
+            "type": "number",
+            "title": "Interval S",
+            "description": "control loop period"
+          },
+          "retention_days": {
+            "type": "number",
+            "title": "Retention Days",
+            "description": "how long history is kept"
+          },
+          "default_profile": {
+            "type": "string",
+            "title": "Default Profile"
+          },
+          "startup_mode": {
+            "type": "string",
+            "title": "Startup Mode",
+            "description": "the mode the daemon starts in; the mode is never saved"
+          },
+          "thermistor": {
+            "$ref": "#/components/schemas/ThermistorModel"
+          },
+          "channels": {
+            "$ref": "#/components/schemas/ChannelsModel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "hardware",
+          "interval_s",
+          "retention_days",
+          "default_profile",
+          "startup_mode",
+          "thermistor",
+          "channels"
+        ],
+        "title": "InfoModel"
+      },
       "Mode": {
         "type": "string",
         "enum": [
@@ -679,6 +1343,28 @@
           "mode"
         ],
         "title": "ModeRequest"
+      },
+      "OutputLimitsRequest": {
+        "properties": {
+          "min": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Min"
+          },
+          "max": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Max"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min",
+          "max"
+        ],
+        "title": "OutputLimitsRequest"
       },
       "PidGainsModel": {
         "properties": {
@@ -757,17 +1443,24 @@
           },
           "setpoint_f": {
             "type": "number",
-            "title": "Setpoint F"
+            "title": "Setpoint F",
+            "description": "default from still.yaml"
           },
           "pid": {
-            "$ref": "#/components/schemas/PidGainsModel"
+            "$ref": "#/components/schemas/PidGainsModel",
+            "description": "default from still.yaml"
           },
           "output_limits": {
             "items": {
               "type": "number"
             },
             "type": "array",
-            "title": "Output Limits"
+            "title": "Output Limits",
+            "description": "default from still.yaml"
+          },
+          "saved": {
+            "$ref": "#/components/schemas/SavedModel",
+            "description": "what the profile uses now: defaults with saved changes on top"
           }
         },
         "type": "object",
@@ -775,7 +1468,8 @@
           "name",
           "setpoint_f",
           "pid",
-          "output_limits"
+          "output_limits",
+          "saved"
         ],
         "title": "ProfileModel"
       },
@@ -804,14 +1498,68 @@
             },
             "type": "array",
             "title": "Profiles"
+          },
+          "supply": {
+            "$ref": "#/components/schemas/SupplyLoopModel",
+            "description": "the shared supply loop; fields are the still.yaml defaults"
           }
         },
         "type": "object",
         "required": [
           "active",
-          "profiles"
+          "profiles",
+          "supply"
         ],
         "title": "ProfilesModel"
+      },
+      "SavedModel": {
+        "properties": {
+          "setpoint_f": {
+            "type": "number",
+            "title": "Setpoint F"
+          },
+          "pid": {
+            "$ref": "#/components/schemas/PidGainsModel"
+          },
+          "output_limits": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Output Limits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "setpoint_f",
+          "pid",
+          "output_limits"
+        ],
+        "title": "SavedModel"
+      },
+      "SegmentModel": {
+        "properties": {
+          "start": {
+            "type": "number",
+            "title": "Start"
+          },
+          "end": {
+            "type": "number",
+            "title": "End"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "auto, manual, off or fault (a fault wins over the mode)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "kind"
+        ],
+        "title": "SegmentModel"
       },
       "SetpointRequest": {
         "properties": {
@@ -877,6 +1625,22 @@
           "supply_pid_gains": {
             "$ref": "#/components/schemas/PidGainsModel"
           },
+          "output_limits": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Output Limits",
+            "description": "[min, max] percent the dephlegmator PID may command; history points report 0-100 because limits are not logged"
+          },
+          "supply_output_limits": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Supply Output Limits",
+            "description": "[min, max] percent the supply PID may command"
+          },
           "fault": {
             "anyOf": [
               {
@@ -900,9 +1664,41 @@
           "pid_gains",
           "supply_setpoint_f",
           "supply_pid_terms",
-          "supply_pid_gains"
+          "supply_pid_gains",
+          "output_limits",
+          "supply_output_limits"
         ],
         "title": "StateModel"
+      },
+      "SupplyLoopModel": {
+        "properties": {
+          "setpoint_f": {
+            "type": "number",
+            "title": "Setpoint F"
+          },
+          "pid": {
+            "$ref": "#/components/schemas/PidGainsModel"
+          },
+          "output_limits": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Output Limits"
+          },
+          "saved": {
+            "$ref": "#/components/schemas/SavedModel",
+            "description": "what the supply loop uses now"
+          }
+        },
+        "type": "object",
+        "required": [
+          "setpoint_f",
+          "pid",
+          "output_limits",
+          "saved"
+        ],
+        "title": "SupplyLoopModel"
       },
       "TemperaturesModel": {
         "properties": {
@@ -931,6 +1727,34 @@
           "cond_return"
         ],
         "title": "TemperaturesModel"
+      },
+      "ThermistorModel": {
+        "properties": {
+          "r_fixed": {
+            "type": "number",
+            "title": "R Fixed"
+          },
+          "beta": {
+            "type": "number",
+            "title": "Beta"
+          },
+          "adc_max": {
+            "type": "number",
+            "title": "Adc Max"
+          },
+          "calibration_factor": {
+            "type": "number",
+            "title": "Calibration Factor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "r_fixed",
+          "beta",
+          "adc_max",
+          "calibration_factor"
+        ],
+        "title": "ThermistorModel"
       },
       "ValidationError": {
         "properties": {

@@ -19,6 +19,8 @@ from .base import VALVE_NAMES, HardwareInterface, Temperatures
 
 
 class SimulatedHW(HardwareInterface):
+    kind = "simulated"
+
     def __init__(
         self,
         *,

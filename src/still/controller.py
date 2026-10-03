@@ -14,9 +14,10 @@ temperature.
 The condenser is held fully open (CONDENSER_PERCENT) rather than run under
 its own PID -- see PLAN.md. FAILSAFE_PERCENT (dephlegmator and condenser fully
 open) matches the position the original scripts commanded at startup, and is
-used here for startup, shutdown, manual/off modes, and sensor faults. The
+used here for startup, shutdown, off mode, and sensor faults. The
 supply valve is deliberately not moved by the failsafe: it holds its last
-position.
+position. Entering manual mode holds all valves where they were last
+commanded; they move only when the operator sets one.
 """
 
 from __future__ import annotations
@@ -65,7 +66,18 @@ class ControllerState:
     supply_setpoint_f: float = 0.0
     supply_pid_terms: tuple = (0.0, 0.0, 0.0)
     supply_pid_gains: tuple = (0.0, 0.0, 0.0)
+    output_limits: tuple = (0.0, 100.0)
+    supply_output_limits: tuple = (0.0, 100.0)
     fault: Optional[str] = None
+
+
+def _merged(setpoint_f: float, pid, output_limits, override: dict) -> dict:
+    p, i, d = override.get("pid") or (pid.p, pid.i, pid.d)
+    return {
+        "setpoint_f": override.get("setpoint_f", setpoint_f),
+        "pid": {"p": p, "i": i, "d": d},
+        "output_limits": list(override.get("output_limits") or output_limits),
+    }
 
 
 class Controller:
@@ -111,7 +123,9 @@ class Controller:
         self._supply_last: Optional[float] = None  # last supply position written
         self._manual_valves: Dict[str, float] = {}
         self._state = ControllerState(
-            supply_setpoint_f=self._supply_pid.setpoint, supply_pid_gains=self._supply_pid.tunings
+            supply_setpoint_f=self._supply_pid.setpoint,
+            supply_pid_gains=self._supply_pid.tunings,
+            supply_output_limits=self._supply_pid.output_limits,
         )
         self.set_profile(profile_name or saved_profile or config.default_profile)
         self.set_mode(Mode.AUTO)
@@ -126,6 +140,7 @@ class Controller:
             self._state.profile = name
             self._state.setpoint_f = self._pid.setpoint
             self._state.pid_gains = self._pid.tunings
+            self._state.output_limits = self._pid.output_limits
         self._save("active_profile", name)
 
     def set_setpoint(self, setpoint_f: float) -> None:
@@ -160,11 +175,93 @@ class Controller:
             override = dict(self._supply_override)
         self._save("supply_override", override)
 
+    def set_profile_setpoint(self, name: str, setpoint_f: float) -> None:
+        """Save a profile's setpoint whether or not it is the active one."""
+        if name not in self._config.profiles:
+            raise KeyError(name)
+        with self._lock:
+            active = name == self._state.profile
+        if active:
+            self.set_setpoint(setpoint_f)
+            return
+        with self._lock:
+            self._overrides.setdefault(name, {})["setpoint_f"] = setpoint_f
+            overrides = self._snapshot_overrides()
+        self._save("overrides", overrides)
+
+    def reset_profile(self, name: str) -> None:
+        """Forget the saved setpoint, gains and limits of a profile, returning it
+        to the config file's values. If it is active its PID is rebuilt now."""
+        if name not in self._config.profiles:
+            raise KeyError(name)
+        with self._lock:
+            self._overrides.pop(name, None)
+            overrides = self._snapshot_overrides()
+            active = name == self._state.profile
+        self._save("overrides", overrides)
+        if active:
+            self.set_profile(name)
+
+    def reset_supply(self) -> None:
+        """Forget the supply loop's saved setpoint, gains and limits."""
+        with self._lock:
+            self._supply_override = {}
+            self._supply_pid = self._build_supply_pid()
+            self._state.supply_setpoint_f = self._supply_pid.setpoint
+            self._state.supply_pid_gains = self._supply_pid.tunings
+            self._state.supply_output_limits = self._supply_pid.output_limits
+        self._save("supply_override", {})
+
+    def saved_profile(self, name: str) -> dict:
+        """The profile's settings now: config defaults with saved changes on top."""
+        profile = self._config.profiles[name]
+        with self._lock:
+            override = dict(self._overrides.get(name, {}))
+        return _merged(profile.setpoint_f, profile.pid, profile.output_limits, override)
+
+    def saved_supply(self) -> dict:
+        cfg = self._config.supply
+        with self._lock:
+            override = dict(self._supply_override)
+        return _merged(cfg.setpoint_f, cfg.pid, cfg.output_limits, override)
+
+    @property
+    def hardware_kind(self) -> str:
+        return self._hw.kind
+
+    def set_output_limits(self, low: float, high: float) -> None:
+        """Clamp the active profile's dephlegmator PID output. Manual moves
+        are not limited."""
+        self._check_limits(low, high)
+        with self._lock:
+            self._pid.output_limits = (low, high)
+            self._state.output_limits = (low, high)
+            self._overrides.setdefault(self._state.profile, {})["output_limits"] = [low, high]
+            overrides = self._snapshot_overrides()
+        self._save("overrides", overrides)
+
+    def set_supply_output_limits(self, low: float, high: float) -> None:
+        self._check_limits(low, high)
+        with self._lock:
+            self._supply_pid.output_limits = (low, high)
+            self._state.supply_output_limits = (low, high)
+            self._supply_override["output_limits"] = [low, high]
+            override = dict(self._supply_override)
+        self._save("supply_override", override)
+
+    @staticmethod
+    def _check_limits(low: float, high: float) -> None:
+        if not 0 <= low < high <= 100:
+            raise ValueError("output limits must satisfy 0 <= min < max <= 100")
+
     def set_mode(self, mode: Mode) -> None:
         with self._lock:
-            self._state.mode = mode
-            if mode != Mode.MANUAL:
+            if mode == Mode.MANUAL and self._state.mode != Mode.MANUAL:
+                # Hold every valve where it was last commanded.
+                self._manual_valves = dict(self._state.valves_pct)
+            elif mode != Mode.MANUAL:
                 self._manual_valves.clear()
+            self._state.mode = mode
 
     def set_manual_valve(self, name: str, percent: float) -> None:
         with self._lock:
@@ -193,7 +290,7 @@ class Controller:
             mode = self._state.mode
 
         if mode == Mode.OFF:
-            return self.failsafe("off", temps=temps)
+            return self.failsafe("off", is_fault=False, temps=temps)
         try:
             if mode == Mode.MANUAL:
                 return self._apply_manual(temps)
@@ -278,7 +375,7 @@ class Controller:
             time_fn=self._pid_time_fn,
         )
         pid.sample_time = profile.sample_time
-        pid.output_limits = tuple(profile.output_limits)
+        pid.output_limits = tuple(override.get("output_limits") or profile.output_limits)
         return pid
 
     def _build_supply_pid(self) -> PID:
@@ -293,7 +390,7 @@ class Controller:
             time_fn=self._pid_time_fn,
         )
         pid.sample_time = cfg.sample_time
-        pid.output_limits = tuple(cfg.output_limits)
+        pid.output_limits = tuple(override.get("output_limits") or cfg.output_limits)
         return pid
 
     def _condenser_percent(self, temps: Temperatures) -> float:
@@ -338,6 +435,8 @@ class Controller:
             supply_setpoint_f=s.supply_setpoint_f,
             supply_pid_terms=s.supply_pid_terms,
             supply_pid_gains=s.supply_pid_gains,
+            output_limits=s.output_limits,
+            supply_output_limits=s.supply_output_limits,
             fault=s.fault,
         )
 
