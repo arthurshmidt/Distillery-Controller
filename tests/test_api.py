@@ -137,7 +137,8 @@ def test_openapi_has_all_routes(env):
     for p in ["/api/state", "/api/stream", "/api/history", "/api/profiles", "/api/profile",
               "/api/setpoint", "/api/mode", "/api/valves/{name}", "/api/pid",
               "/api/supply/setpoint", "/api/supply/pid", "/api/events", "/api/history.csv",
-              "/api/output-limits", "/api/supply/output-limits"]:
+              "/api/output-limits", "/api/supply/output-limits", "/api/info",
+              "/api/profiles/{name}/setpoint", "/api/profiles/{name}/overrides", "/api/supply/overrides"]:
         assert p in paths
 
 
@@ -230,3 +231,66 @@ def test_history_csv(env):
     assert len(lines) == 4
     first = lines[1].split(",")
     assert first[0] == "1002.000" and first[1] == "1970-01-01T00:16:42.000Z" and first[2] == "auto"
+
+
+def test_profiles_report_defaults_and_saved_values(env):
+    client, controller, _ = env
+    body = client.get("/api/profiles", headers=AUTH).json()
+    whiskey = next(p for p in body["profiles"] if p["name"] == "whiskey")
+    assert whiskey["setpoint_f"] == whiskey["saved"]["setpoint_f"] == 130
+    assert body["supply"]["setpoint_f"] == body["supply"]["saved"]["setpoint_f"] == 90
+    assert body["supply"]["output_limits"] == [0, 60]
+
+    client.put("/api/setpoint", json={"setpoint_f": 128}, headers=AUTH)
+    client.put("/api/supply/setpoint", json={"setpoint_f": 88}, headers=AUTH)
+    body = client.get("/api/profiles", headers=AUTH).json()
+    whiskey = next(p for p in body["profiles"] if p["name"] == "whiskey")
+    assert whiskey["setpoint_f"] == 130 and whiskey["saved"]["setpoint_f"] == 128  # default unchanged
+    assert body["supply"]["setpoint_f"] == 90 and body["supply"]["saved"]["setpoint_f"] == 88
+
+
+def test_set_setpoint_of_any_profile(env):
+    client, controller, _ = env
+    r = client.put("/api/profiles/gin/setpoint", json={"setpoint_f": 117}, headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["profile"] == "whiskey" and r.json()["setpoint_f"] == 130  # active one untouched
+    r = client.put("/api/profiles/whiskey/setpoint", json={"setpoint_f": 126}, headers=AUTH)
+    assert r.json()["setpoint_f"] == 126  # active: applies now
+    gin = next(p for p in client.get("/api/profiles", headers=AUTH).json()["profiles"] if p["name"] == "gin")
+    assert gin["saved"]["setpoint_f"] == 117
+    assert client.put("/api/profiles/nope/setpoint", json={"setpoint_f": 100}, headers=AUTH).status_code == 404
+    assert client.put("/api/profiles/gin/setpoint", json={"setpoint_f": 999}, headers=AUTH).status_code == 422
+    assert client.put("/api/profiles/gin/setpoint", json={"setpoint_f": 100}).status_code == 401
+
+
+def test_reset_overrides(env):
+    client, controller, _ = env
+    client.put("/api/setpoint", json={"setpoint_f": 120}, headers=AUTH)
+    client.put("/api/output-limits", json={"min": 50, "max": 60}, headers=AUTH)
+    client.put("/api/profiles/gin/setpoint", json={"setpoint_f": 111}, headers=AUTH)
+    client.put("/api/supply/setpoint", json={"setpoint_f": 70}, headers=AUTH)
+
+    r = client.delete("/api/profiles/whiskey/overrides", headers=AUTH)
+    assert r.status_code == 200
+    assert r.json()["setpoint_f"] == 130 and r.json()["output_limits"] == [30, 100]
+    gin = next(p for p in client.get("/api/profiles", headers=AUTH).json()["profiles"] if p["name"] == "gin")
+    assert gin["saved"]["setpoint_f"] == 111  # untouched
+
+    r = client.delete("/api/supply/overrides", headers=AUTH)
+    assert r.json()["supply_setpoint_f"] == 90
+    assert client.delete("/api/profiles/nope/overrides", headers=AUTH).status_code == 404
+    assert client.delete("/api/supply/overrides").status_code == 401
+
+
+def test_info(env):
+    client, controller, loop = env
+    body = client.get("/api/info", headers=AUTH).json()
+    assert body["hardware"] == "simulated"
+    assert body["version"] == client.get("/openapi.json").json()["info"]["version"]
+    assert body["interval_s"] == 0.01
+    assert body["retention_days"] == 14
+    assert body["default_profile"] == "whiskey"
+    assert body["startup_mode"] == "auto"
+    assert body["thermistor"]["beta"] == 3380
+    assert body["channels"]["ao"] == {"dephlegmator": 0, "condenser": 1, "supply": 2}
+    assert client.get("/api/info").status_code == 401

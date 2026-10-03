@@ -102,6 +102,10 @@ class Store:
             self._rdb = sqlite3.connect(path, check_same_thread=False)
         self.prune()
 
+    @property
+    def retention_days(self) -> float:
+        return self._retention_s / 86400
+
     def close(self) -> None:
         with self._lock:
             self._db.close()

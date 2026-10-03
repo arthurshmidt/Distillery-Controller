@@ -314,6 +314,8 @@ export function closeConfirm() {
   $('#confirm').hidden = true;
 }
 
+export function showTab(tab) { ui.tab = tab; }
+
 export function confirmOpen() { return ui.confirm != null; }
 
 // -- events ------------------------------------------------------------------

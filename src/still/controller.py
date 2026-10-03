@@ -71,6 +71,15 @@ class ControllerState:
     fault: Optional[str] = None
 
 
+def _merged(setpoint_f: float, pid, output_limits, override: dict) -> dict:
+    p, i, d = override.get("pid") or (pid.p, pid.i, pid.d)
+    return {
+        "setpoint_f": override.get("setpoint_f", setpoint_f),
+        "pid": {"p": p, "i": i, "d": d},
+        "output_limits": list(override.get("output_limits") or output_limits),
+    }
+
+
 class Controller:
     """Thread-safety: `tick()` is meant to be called from a single control
     thread. `state()`, `set_setpoint()`, `set_mode()`, `set_profile()` and
@@ -165,6 +174,60 @@ class Controller:
             self._supply_override["pid"] = [p, i, d]
             override = dict(self._supply_override)
         self._save("supply_override", override)
+
+    def set_profile_setpoint(self, name: str, setpoint_f: float) -> None:
+        """Save a profile's setpoint whether or not it is the active one."""
+        if name not in self._config.profiles:
+            raise KeyError(name)
+        with self._lock:
+            active = name == self._state.profile
+        if active:
+            self.set_setpoint(setpoint_f)
+            return
+        with self._lock:
+            self._overrides.setdefault(name, {})["setpoint_f"] = setpoint_f
+            overrides = self._snapshot_overrides()
+        self._save("overrides", overrides)
+
+    def reset_profile(self, name: str) -> None:
+        """Forget the saved setpoint, gains and limits of a profile, returning it
+        to the config file's values. If it is active its PID is rebuilt now."""
+        if name not in self._config.profiles:
+            raise KeyError(name)
+        with self._lock:
+            self._overrides.pop(name, None)
+            overrides = self._snapshot_overrides()
+            active = name == self._state.profile
+        self._save("overrides", overrides)
+        if active:
+            self.set_profile(name)
+
+    def reset_supply(self) -> None:
+        """Forget the supply loop's saved setpoint, gains and limits."""
+        with self._lock:
+            self._supply_override = {}
+            self._supply_pid = self._build_supply_pid()
+            self._state.supply_setpoint_f = self._supply_pid.setpoint
+            self._state.supply_pid_gains = self._supply_pid.tunings
+            self._state.supply_output_limits = self._supply_pid.output_limits
+        self._save("supply_override", {})
+
+    def saved_profile(self, name: str) -> dict:
+        """The profile's settings now: config defaults with saved changes on top."""
+        profile = self._config.profiles[name]
+        with self._lock:
+            override = dict(self._overrides.get(name, {}))
+        return _merged(profile.setpoint_f, profile.pid, profile.output_limits, override)
+
+    def saved_supply(self) -> dict:
+        cfg = self._config.supply
+        with self._lock:
+            override = dict(self._supply_override)
+        return _merged(cfg.setpoint_f, cfg.pid, cfg.output_limits, override)
+
+    @property
+    def hardware_kind(self) -> str:
+        return self._hw.kind
 
     def set_output_limits(self, low: float, high: float) -> None:
         """Clamp the active profile's dephlegmator PID output. Manual moves

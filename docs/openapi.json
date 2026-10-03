@@ -425,6 +425,220 @@
         }
       }
     },
+    "/api/info": {
+      "get": {
+        "summary": "Get Info",
+        "operationId": "get_info_api_info_get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InfoModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{name}/setpoint": {
+      "put": {
+        "summary": "Put Profile Setpoint",
+        "description": "Save a profile's setpoint, whether or not it is the active one.",
+        "operationId": "put_profile_setpoint_api_profiles__name__setpoint_put",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetpointRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{name}/overrides": {
+      "delete": {
+        "summary": "Delete Profile Overrides",
+        "description": "Forget a profile's saved setpoint, gains and limits (back to still.yaml).",
+        "operationId": "delete_profile_overrides_api_profiles__name__overrides_delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/supply/overrides": {
+      "delete": {
+        "summary": "Delete Supply Overrides",
+        "operationId": "delete_supply_overrides_api_supply_overrides_delete",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateModel"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/profile": {
       "put": {
         "summary": "Put Profile",
@@ -942,6 +1156,30 @@
   },
   "components": {
     "schemas": {
+      "ChannelsModel": {
+        "properties": {
+          "ai": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Ai"
+          },
+          "ao": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Ao"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ai",
+          "ao"
+        ],
+        "title": "ChannelsModel"
+      },
       "EventModel": {
         "properties": {
           "timestamp": {
@@ -1034,6 +1272,56 @@
           "state"
         ],
         "title": "HistoryPointModel"
+      },
+      "InfoModel": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "hardware": {
+            "type": "string",
+            "title": "Hardware",
+            "description": "simulated or widgetlords"
+          },
+          "interval_s": {
+            "type": "number",
+            "title": "Interval S",
+            "description": "control loop period"
+          },
+          "retention_days": {
+            "type": "number",
+            "title": "Retention Days",
+            "description": "how long history is kept"
+          },
+          "default_profile": {
+            "type": "string",
+            "title": "Default Profile"
+          },
+          "startup_mode": {
+            "type": "string",
+            "title": "Startup Mode",
+            "description": "the mode the daemon starts in; the mode is never saved"
+          },
+          "thermistor": {
+            "$ref": "#/components/schemas/ThermistorModel"
+          },
+          "channels": {
+            "$ref": "#/components/schemas/ChannelsModel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "hardware",
+          "interval_s",
+          "retention_days",
+          "default_profile",
+          "startup_mode",
+          "thermistor",
+          "channels"
+        ],
+        "title": "InfoModel"
       },
       "Mode": {
         "type": "string",
@@ -1155,17 +1443,24 @@
           },
           "setpoint_f": {
             "type": "number",
-            "title": "Setpoint F"
+            "title": "Setpoint F",
+            "description": "default from still.yaml"
           },
           "pid": {
-            "$ref": "#/components/schemas/PidGainsModel"
+            "$ref": "#/components/schemas/PidGainsModel",
+            "description": "default from still.yaml"
           },
           "output_limits": {
             "items": {
               "type": "number"
             },
             "type": "array",
-            "title": "Output Limits"
+            "title": "Output Limits",
+            "description": "default from still.yaml"
+          },
+          "saved": {
+            "$ref": "#/components/schemas/SavedModel",
+            "description": "what the profile uses now: defaults with saved changes on top"
           }
         },
         "type": "object",
@@ -1173,7 +1468,8 @@
           "name",
           "setpoint_f",
           "pid",
-          "output_limits"
+          "output_limits",
+          "saved"
         ],
         "title": "ProfileModel"
       },
@@ -1202,14 +1498,44 @@
             },
             "type": "array",
             "title": "Profiles"
+          },
+          "supply": {
+            "$ref": "#/components/schemas/SupplyLoopModel",
+            "description": "the shared supply loop; fields are the still.yaml defaults"
           }
         },
         "type": "object",
         "required": [
           "active",
-          "profiles"
+          "profiles",
+          "supply"
         ],
         "title": "ProfilesModel"
+      },
+      "SavedModel": {
+        "properties": {
+          "setpoint_f": {
+            "type": "number",
+            "title": "Setpoint F"
+          },
+          "pid": {
+            "$ref": "#/components/schemas/PidGainsModel"
+          },
+          "output_limits": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Output Limits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "setpoint_f",
+          "pid",
+          "output_limits"
+        ],
+        "title": "SavedModel"
       },
       "SegmentModel": {
         "properties": {
@@ -1344,6 +1670,36 @@
         ],
         "title": "StateModel"
       },
+      "SupplyLoopModel": {
+        "properties": {
+          "setpoint_f": {
+            "type": "number",
+            "title": "Setpoint F"
+          },
+          "pid": {
+            "$ref": "#/components/schemas/PidGainsModel"
+          },
+          "output_limits": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Output Limits"
+          },
+          "saved": {
+            "$ref": "#/components/schemas/SavedModel",
+            "description": "what the supply loop uses now"
+          }
+        },
+        "type": "object",
+        "required": [
+          "setpoint_f",
+          "pid",
+          "output_limits",
+          "saved"
+        ],
+        "title": "SupplyLoopModel"
+      },
       "TemperaturesModel": {
         "properties": {
           "deph_supply": {
@@ -1371,6 +1727,34 @@
           "cond_return"
         ],
         "title": "TemperaturesModel"
+      },
+      "ThermistorModel": {
+        "properties": {
+          "r_fixed": {
+            "type": "number",
+            "title": "R Fixed"
+          },
+          "beta": {
+            "type": "number",
+            "title": "Beta"
+          },
+          "adc_max": {
+            "type": "number",
+            "title": "Adc Max"
+          },
+          "calibration_factor": {
+            "type": "number",
+            "title": "Calibration Factor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "r_fixed",
+          "beta",
+          "adc_max",
+          "calibration_factor"
+        ],
+        "title": "ThermistorModel"
       },
       "ValidationError": {
         "properties": {

@@ -103,7 +103,8 @@ All `/api` routes require the token as `Authorization: Bearer <token>`. The SSE 
 | `GET /api/history` | logged states with `since` < time <= `until` (unix seconds); `step` (seconds) keeps at most one point per step-second bucket (the earliest), so a long window stays small; `limit` (default 7200, newest kept) |
 | `GET /api/events` | `since`, `until` (inclusive): `{events, segments}`. Events (`mode`, `profile`, `setpoint`, `fault`, `log`) come from the full-resolution rows, so thinning never hides a short fault; segments are the mode/fault timeline, with logging gaps left out |
 | `GET /api/history.csv` | `since`, `until`: every logged row in the window as CSV, streamed. Fetch it with the `Authorization` header and save the blob |
-| `GET /api/profiles` | list profiles and the active one |
+| `GET /api/profiles` | the active profile and every profile: `setpoint_f`, `pid` and `output_limits` are the `still.yaml` defaults; `saved` is what it uses now (defaults with saved changes on top). `supply` has the same shape for the shared supply loop |
+| `GET /api/info` | read-only: version, hardware (`simulated` or `widgetlords`), loop interval, history retention, default profile, startup mode, thermistor constants, channel map |
 | `PUT /api/profile` | `{"name": ...}` select the active profile; keeps the current mode and manual valves |
 | `PUT /api/setpoint` | `{"setpoint_f": ...}` between -40 and 300 |
 | `PUT /api/mode` | `{"mode": "auto" \| "manual" \| "off"}` |
@@ -113,6 +114,9 @@ All `/api` routes require the token as `Authorization: Bearer <token>`. The SSE 
 | `PUT /api/supply/output-limits` | same, for the supply loop |
 | `PUT /api/supply/setpoint` | `{"setpoint_f": ...}` for the supply loop |
 | `PUT /api/supply/pid` | `{"p": ..., "i": ..., "d": ...}` for the supply loop |
+| `PUT /api/profiles/{name}/setpoint` | `{"setpoint_f": ...}` saves a profile's setpoint, active or not (404 for an unknown profile) |
+| `DELETE /api/profiles/{name}/overrides` | forget the profile's saved setpoint, gains and limits (back to `still.yaml`); applies now if it is active |
+| `DELETE /api/supply/overrides` | the same for the supply loop |
 
 ## Tests
 
@@ -127,7 +131,7 @@ The tests run entirely against `SimulatedHW` and need no hardware.
 Phases 1, 2, 4, 5 and 6 of [`PLAN.md`](PLAN.md) are done. Still to do:
 
 - **Phase 3:** verify against the real boards on the Pi, including the sensor-check margin and the systemd shutdown.
-- **Phase 7:** the web front end, designed in Claude Design (see [`docs/still-control-frontend-handoff.md`](docs/still-control-frontend-handoff.md)). The dashboard and History screens are built and served at `/` from `src/still/static/` (no token needed to load it; the page asks for the token). Settings is a placeholder. B1 to B4 of the daemon changes in the handoff are done; B5 to B8 are still to do.
+- **Phase 7:** the web front end (the dashboard, History and Settings screens), designed in Claude Design (see [`docs/still-control-frontend-handoff.md`](docs/still-control-frontend-handoff.md)) and served at `/` from `src/still/static/`; B1 to B8 of the handoff are done. It has not been looked at in a real browser, on a tablet or phone, or on the Pi yet.
 
 ## Safety
 

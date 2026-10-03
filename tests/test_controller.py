@@ -345,3 +345,86 @@ def test_output_limits_are_per_profile():
     assert controller.state().output_limits == tuple(config.profiles["gin"].output_limits)
     controller.set_profile("whiskey")
     assert controller.state().output_limits == (50, 60)
+
+
+def test_saved_values_are_defaults_with_changes_on_top():
+    controller, hw, config = make_controller()
+    default = config.profiles["whiskey"]
+    saved = controller.saved_profile("whiskey")
+    assert saved["setpoint_f"] == default.setpoint_f
+    assert saved["pid"] == {"p": default.pid.p, "i": default.pid.i, "d": default.pid.d}
+    assert saved["output_limits"] == list(default.output_limits)
+
+    controller.set_setpoint(125.0)
+    controller.set_pid_gains(-2.0, -0.5, 0.1)
+    controller.set_output_limits(35, 95)
+    saved = controller.saved_profile("whiskey")
+    assert saved == {"setpoint_f": 125.0, "pid": {"p": -2.0, "i": -0.5, "d": 0.1}, "output_limits": [35, 95]}
+    assert controller.saved_profile("gin")["setpoint_f"] == config.profiles["gin"].setpoint_f
+
+    controller.set_supply_setpoint(80.0)
+    assert controller.saved_supply()["setpoint_f"] == 80.0
+
+
+def test_set_setpoint_of_an_inactive_profile_leaves_the_active_one_alone():
+    controller, hw, config = make_controller("whiskey")
+    controller.set_profile_setpoint("gin", 118.0)
+    assert controller.state().setpoint_f == config.profiles["whiskey"].setpoint_f
+    assert controller.saved_profile("gin")["setpoint_f"] == 118.0
+    controller.set_profile("gin")
+    assert controller.state().setpoint_f == 118.0
+    with pytest.raises(KeyError):
+        controller.set_profile_setpoint("nope", 100.0)
+
+
+def test_set_setpoint_of_the_active_profile_applies_now():
+    controller, hw, _ = make_controller("whiskey")
+    controller.set_profile_setpoint("whiskey", 127.0)
+    assert controller.state().setpoint_f == 127.0
+
+
+def test_reset_active_profile_applies_defaults_and_keeps_mode():
+    controller, hw, config = make_controller("whiskey")
+    default = config.profiles["whiskey"]
+    controller.set_setpoint(120.0)
+    controller.set_pid_gains(-3.0, -1.0, 0.5)
+    controller.set_output_limits(50, 60)
+    controller.set_mode(Mode.MANUAL)
+    controller.reset_profile("whiskey")
+    s = controller.state()
+    assert s.mode == Mode.MANUAL
+    assert s.setpoint_f == default.setpoint_f
+    assert s.pid_gains == (default.pid.p, default.pid.i, default.pid.d)
+    assert s.output_limits == tuple(default.output_limits)
+    assert controller.saved_profile("whiskey")["setpoint_f"] == default.setpoint_f
+
+
+def test_reset_inactive_profile_does_not_touch_the_running_pid():
+    controller, hw, config = make_controller("whiskey")
+    controller.set_setpoint(125.0)
+    controller.set_profile_setpoint("gin", 111.0)
+    controller.reset_profile("gin")
+    assert controller.state().setpoint_f == 125.0
+    assert controller.saved_profile("gin")["setpoint_f"] == config.profiles["gin"].setpoint_f
+    with pytest.raises(KeyError):
+        controller.reset_profile("nope")
+
+
+def test_reset_supply_restores_defaults():
+    controller, hw, config = make_controller()
+    sup = config.supply
+    controller.set_supply_setpoint(70.0)
+    controller.set_supply_pid_gains(-5.0, -1.0, 0.0)
+    controller.set_supply_output_limits(10, 20)
+    controller.reset_supply()
+    s = controller.state()
+    assert s.supply_setpoint_f == sup.setpoint_f
+    assert s.supply_pid_gains == (sup.pid.p, sup.pid.i, sup.pid.d)
+    assert s.supply_output_limits == tuple(sup.output_limits)
+    for _ in range(3):
+        assert sup.output_limits[0] <= controller.tick().valves_pct["supply"] <= sup.output_limits[1]
+
+
+def test_hardware_kind_is_reported():
+    controller, hw, _ = make_controller()
+    assert controller.hardware_kind == "simulated"

@@ -4,6 +4,7 @@ import { auth, get, onUnauthorized } from './api.js';
 import { store, emit, onChange, pointFromState } from './state.js';
 import * as dashboard from './dashboard.js';
 import * as history from './history.js';
+import * as settings from './settings.js';
 import { clock } from './chart.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -34,12 +35,14 @@ function toast(message) {
 }
 dashboard.setToast(toast);
 history.setToast(toast);
+settings.setToast(toast);
 
 // -- login ----------------------------------------------------------------------
 
 function showLogin(rejected) {
   closeStream();
   store.signedIn = false;
+  store.rejected = !!rejected;
   $('#login').hidden = false;
   $('#lg-error').hidden = !rejected;
   $('#lg-token').value = '';
@@ -57,12 +60,18 @@ $('#login-form').addEventListener('submit', (e) => {
   start();
 });
 
-$('#signout').addEventListener('click', () => {
+function signOut() {
   auth.clear();
   store.state = null;
   store.hist = [];
   showLogin(false);
-});
+}
+
+function useToken(token) {
+  auth.set(token);
+  store.rejected = false;
+  start();
+}
 
 // -- stream ---------------------------------------------------------------------
 
@@ -106,6 +115,7 @@ function connect() {
 
 async function start() {
   $('#login').hidden = true;
+  store.rejected = false;
   if (!auth.token) { showLogin(false); return; }
   try {
     store.state = await get('/api/state');
@@ -122,6 +132,7 @@ async function start() {
   dashboard.loadProfiles();
   dashboard.loadHistory();
   if (store.route === 'history') history.load();
+  if (store.route === 'settings') settings.load();
 }
 
 $('#retry').addEventListener('click', () => { backoff = 1000; connect(); });
@@ -137,15 +148,19 @@ setInterval(() => {
 
 // -- routing and banners ------------------------------------------------------------
 
-const ROUTES = { '': 'dashboard', '/': 'dashboard', '/history': 'history', '/settings': 'settings' };
+// #/tune is the dashboard opened on the Advanced · PID tab (linked from Settings).
+const ROUTES = { '': 'dashboard', '/': 'dashboard', '/tune': 'dashboard', '/history': 'history', '/settings': 'settings' };
 
 function route() {
-  store.route = ROUTES[location.hash.replace(/^#/, '')] || 'dashboard';
+  const hash = location.hash.replace(/^#/, '');
+  store.route = ROUTES[hash] || 'dashboard';
+  if (hash === '/tune') dashboard.showTab('adv');
   for (const name of ['dashboard', 'history', 'settings']) {
     $('#view-' + name).hidden = store.route !== name;
   }
   $('#view-' + store.route).querySelector('header').after($('#banners'));
   if (store.route === 'history' && store.signedIn) history.load();
+  if (store.route === 'settings' && store.signedIn) settings.load();
   emit();
 }
 window.addEventListener('hashchange', route);
@@ -174,13 +189,16 @@ onChange(() => {
   renderBanners();
   dashboard.render();
   history.renderStatus();
+  settings.render();
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && dashboard.confirmOpen()) dashboard.closeConfirm();
+  if (e.key === 'Escape' && settings.resetOpen()) settings.closeReset();
 });
 
 dashboard.init();
 history.init();
+settings.init({ signOut, useToken });
 route();
 start();

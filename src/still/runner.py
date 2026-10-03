@@ -44,6 +44,14 @@ class ControlLoop:
         except Exception:
             logger.exception("could not command the failsafe position at shutdown")
 
+    @property
+    def interval_s(self) -> float:
+        return self._interval_s
+
+    @property
+    def retention_days(self) -> float:
+        return self._store.retention_days
+
     def history(
         self,
         since: Optional[float] = None,

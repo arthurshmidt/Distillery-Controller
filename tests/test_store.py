@@ -290,3 +290,19 @@ def test_thinning_by_seeks_matches_thinning_by_grouping(monkeypatch):
     assert by_seeks == by_grouping
     assert len(by_seeks) > 20
     assert by_seeks == sorted(set(by_seeks))
+
+
+def test_reset_is_saved_and_restored(config, tmp_path):
+    path = str(tmp_path / "s.db")
+    first, second = list(config.profiles)[:2]
+    c = Controller(SimulatedHW(seed=1), config, profile_name=first, store=Store(path))
+    c.set_setpoint(100.0)
+    c.set_profile_setpoint(second, 99.0)
+    c.set_supply_setpoint(70.0)
+    c.reset_profile(first)
+    c.reset_supply()
+
+    c2 = Controller(SimulatedHW(seed=1), config, profile_name=first, store=Store(path))
+    assert c2.saved_profile(first)["setpoint_f"] == config.profiles[first].setpoint_f
+    assert c2.saved_profile(second)["setpoint_f"] == 99.0  # reset only touched the first
+    assert c2.state().supply_setpoint_f == config.supply.setpoint_f

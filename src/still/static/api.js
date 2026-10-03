@@ -29,7 +29,7 @@ export class ApiError extends Error {
 let unauthorizedHandler = () => {};
 export function onUnauthorized(fn) { unauthorizedHandler = fn; }
 
-async function request(method, path, body) {
+export async function request(method, path, body) {
   const headers = { Authorization: 'Bearer ' + auth.token };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });

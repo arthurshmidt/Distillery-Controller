@@ -422,11 +422,55 @@
 </main>
 </div>
 <div id="view-settings" class="view" style="display: contents" hidden>
-  <header class="panel top"><div class="title"><div class="eyebrow">SHMIDT SPIRITS</div><h1>SETTINGS</h1></div><a class="btn" href="#/">DASHBOARD</a></header>
-  <section class="panel stub">
-    <p>The settings screen is not built yet.</p>
-    <div><button type="button" class="btn" id="signout">SIGN OUT</button></div>
+<header class="panel top">
+  <a class="btn" href="#/" style="min-height: 48px"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round"><path d="M15 5 L8 12 L15 19"/></svg>DASHBOARD</a>
+  <div class="title"><div class="eyebrow">SHMIDT SPIRITS</div><h1>SETTINGS</h1></div>
+  <div role="status" class="conn" id="s-conn"><span class="dot"></span><div><b id="s-conn-label">LIVE</b><small id="s-conn-detail"></small></div></div>
+</header>
+
+<main style="flex-direction: column">
+  <section aria-label="Profiles" style="display: flex; flex-direction: column; gap: 8px">
+    <div class="row wrap" style="justify-content: space-between; align-items: baseline; padding: 0 2px">
+      <h2 style="font-size: 15px; letter-spacing: 0.12em">PROFILES &amp; LOOPS</h2>
+      <span class="row" style="gap: 8px; font-size: 13px; color: var(--muted)"><i style="width: 10px; height: 10px; border-radius: 2px; background: var(--amber)"></i>Saved value differs from the default in still.yaml</span>
+    </div>
+    <div class="scards" id="s-cards"></div>
+    <div class="warn" id="s-error" role="alert" hidden></div>
   </section>
+
+  <div class="row wrap" style="align-items: stretch; gap: 12px">
+    <section aria-label="Connection" class="panel sbox" style="flex: 1 1 340px">
+      <h2 style="font-size: 15px; letter-spacing: 0.12em">CONNECTION</h2>
+      <div class="kv3">
+        <div><span class="lbl">STREAM</span><b id="s-stream">—</b></div>
+        <div><span class="lbl">TOKEN</span><b id="s-token-state">—</b></div>
+        <div><span class="lbl">API</span><b>/api on this host</b></div>
+      </div>
+      <div class="field">
+        <label class="lbl" for="st-token">ACCESS TOKEN</label>
+        <div class="row wrap">
+          <input id="st-token" type="password" autocomplete="off" style="flex: 1 1 180px; min-width: 0; height: 56px; padding: 0 14px; border-radius: 4px; border: 1px solid var(--ctl-bd); background: var(--bg); color: var(--ink); font-family: var(--mono); font-size: 18px">
+          <button type="button" class="btn" id="st-show" aria-pressed="false" style="height: 56px; min-width: 76px">SHOW</button>
+          <button type="button" class="btn btn-solid" id="st-save" style="height: 56px" disabled>SAVE</button>
+        </div>
+        <span style="font-size: 13px; color: var(--muted)">Kept on this device only and sent with every request. Saving reconnects the stream.</span>
+      </div>
+      <div class="row wrap" style="justify-content: space-between; margin-top: auto; padding-top: 10px; border-top: 1px solid #1a2028; gap: 8px 16px">
+        <span style="flex: 1 1 180px; font-size: 13px; color: var(--muted)">Signing out removes the token from this device. The controller keeps running.</span>
+        <button type="button" class="btn" id="signout" style="min-height: 48px">SIGN OUT</button>
+      </div>
+    </section>
+
+    <section aria-label="Controller information" class="panel sbox" style="flex: 1.6 1 420px">
+      <div class="row wrap" style="justify-content: space-between; align-items: baseline">
+        <h2 style="font-size: 15px; letter-spacing: 0.12em">CONTROLLER</h2>
+        <span style="font-size: 13px; color: var(--muted)">Read only. Set in still.yaml and the service options.</span>
+      </div>
+      <div class="warn" id="s-info-error" hidden>Could not load the controller information.</div>
+      <div class="infogrid"><div id="info-left"></div><div id="info-right"></div></div>
+    </section>
+  </div>
+</main>
 </div>
 
 </div>
@@ -438,6 +482,17 @@
     <div class="btns">
       <button type="button" class="btn btn-big" id="cf-cancel">CANCEL</button>
       <button type="button" class="btn btn-big btn-amber" id="cf-ok"></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="reset-confirm" hidden>
+  <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="rs-title">
+    <h2 id="rs-title"></h2>
+    <ul><li>Setpoint, PID gains and output limits go back to the values in still.yaml.</li><li id="rs-effect"></li></ul>
+    <div class="btns">
+      <button type="button" class="btn btn-big" id="rs-cancel">CANCEL</button>
+      <button type="button" class="btn btn-big btn-amber" id="rs-ok">RESET</button>
     </div>
   </div>
 </div>

@@ -23,6 +23,8 @@ else:
 
 
 class WidgetlordsHW(HardwareInterface):
+    kind = "widgetlords"
+
     def __init__(self, config: AppConfig):
         if _import_error is not None:
             raise RuntimeError(

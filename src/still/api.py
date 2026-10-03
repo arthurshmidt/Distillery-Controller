@@ -16,6 +16,7 @@ import io
 import json
 import secrets
 from datetime import datetime, timezone
+from importlib import metadata
 from pathlib import Path
 from typing import AsyncIterator, Dict, Iterator, List, Optional
 
@@ -24,6 +25,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
+from . import __version__
 from .controller import Controller, ControllerState, Mode
 from .config import AppConfig
 from .hardware.base import VALVE_NAMES
@@ -110,16 +112,51 @@ def _csv_line(values) -> str:
     return out.getvalue()
 
 
-class ProfileModel(BaseModel):
-    name: str
+class SavedModel(BaseModel):
     setpoint_f: float
     pid: PidGainsModel
     output_limits: List[float]
 
 
+class ProfileModel(BaseModel):
+    name: str
+    setpoint_f: float = Field(description="default from still.yaml")
+    pid: PidGainsModel = Field(description="default from still.yaml")
+    output_limits: List[float] = Field(description="default from still.yaml")
+    saved: SavedModel = Field(description="what the profile uses now: defaults with saved changes on top")
+
+
+class SupplyLoopModel(SavedModel):
+    saved: SavedModel = Field(description="what the supply loop uses now")
+
+
 class ProfilesModel(BaseModel):
     active: str
     profiles: List[ProfileModel]
+    supply: SupplyLoopModel = Field(description="the shared supply loop; fields are the still.yaml defaults")
+
+
+class ThermistorModel(BaseModel):
+    r_fixed: float
+    beta: float
+    adc_max: float
+    calibration_factor: float
+
+
+class ChannelsModel(BaseModel):
+    ai: Dict[str, int]
+    ao: Dict[str, int]
+
+
+class InfoModel(BaseModel):
+    version: str
+    hardware: str = Field(description="simulated or widgetlords")
+    interval_s: float = Field(description="control loop period")
+    retention_days: float = Field(description="how long history is kept")
+    default_profile: str
+    startup_mode: str = Field(description="the mode the daemon starts in; the mode is never saved")
+    thermistor: ThermistorModel
+    channels: ChannelsModel
 
 
 class ProfileRequest(BaseModel):
@@ -196,7 +233,11 @@ def create_app(
         if supplied is None or not secrets.compare_digest(supplied.encode(), token.encode()):
             raise HTTPException(401, "missing or invalid token", headers={"WWW-Authenticate": "Bearer"})
 
-    app = FastAPI(title="Still Controller", version="0.1.0")
+    try:
+        version = metadata.version("still-controller")
+    except metadata.PackageNotFoundError:  # running from a source tree that was never installed
+        version = __version__
+    app = FastAPI(title="Still Controller", version=version)
     api = APIRouter(prefix="/api", dependencies=[Depends(check_token)])
 
     @api.get("/state", response_model=StateModel)
@@ -260,6 +301,7 @@ def create_app(
 
     @api.get("/profiles", response_model=ProfilesModel)
     def get_profiles() -> ProfilesModel:
+        sup = config.supply
         return ProfilesModel(
             active=controller.state().profile,
             profiles=[
@@ -268,10 +310,54 @@ def create_app(
                     setpoint_f=p.setpoint_f,
                     pid=PidGainsModel(p=p.pid.p, i=p.pid.i, d=p.pid.d),
                     output_limits=list(p.output_limits),
+                    saved=SavedModel(**controller.saved_profile(name)),
                 )
                 for name, p in config.profiles.items()
             ],
+            supply=SupplyLoopModel(
+                setpoint_f=sup.setpoint_f,
+                pid=PidGainsModel(p=sup.pid.p, i=sup.pid.i, d=sup.pid.d),
+                output_limits=list(sup.output_limits),
+                saved=SavedModel(**controller.saved_supply()),
+            ),
         )
+
+    @api.get("/info", response_model=InfoModel)
+    def get_info() -> InfoModel:
+        t = config.thermistor
+        return InfoModel(
+            version=version,
+            hardware=controller.hardware_kind,
+            interval_s=loop.interval_s,
+            retention_days=loop.retention_days,
+            default_profile=config.default_profile,
+            startup_mode=Mode.AUTO.value,
+            thermistor=ThermistorModel(
+                r_fixed=t.r_fixed, beta=t.beta, adc_max=t.adc_max, calibration_factor=t.calibration_factor
+            ),
+            channels=ChannelsModel(ai=dict(config.channels.ai), ao=dict(config.channels.ao)),
+        )
+
+    @api.put("/profiles/{name}/setpoint", response_model=StateModel)
+    def put_profile_setpoint(name: str, body: SetpointRequest) -> StateModel:
+        """Save a profile's setpoint, whether or not it is the active one."""
+        if name not in config.profiles:
+            raise HTTPException(404, f"unknown profile {name!r}")
+        controller.set_profile_setpoint(name, body.setpoint_f)
+        return state_model(controller.state())
+
+    @api.delete("/profiles/{name}/overrides", response_model=StateModel)
+    def delete_profile_overrides(name: str) -> StateModel:
+        """Forget a profile's saved setpoint, gains and limits (back to still.yaml)."""
+        if name not in config.profiles:
+            raise HTTPException(404, f"unknown profile {name!r}")
+        controller.reset_profile(name)
+        return state_model(controller.state())
+
+    @api.delete("/supply/overrides", response_model=StateModel)
+    def delete_supply_overrides() -> StateModel:
+        controller.reset_supply()
+        return state_model(controller.state())
 
     @api.put("/profile", response_model=StateModel)
     def put_profile(body: ProfileRequest) -> StateModel:
