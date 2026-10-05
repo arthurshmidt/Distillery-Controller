@@ -42,7 +42,7 @@ def main(argv=None) -> int:
     store = Store(args.db)
     controller = Controller(hw, config, store=store)
     loop = ControlLoop(controller, interval_s=args.interval, store=store)
-    app = create_app(controller, loop, config, token)
+    app = create_app(controller, loop, config, token, simulator=hw if isinstance(hw, SimulatedHW) else None)
 
     loop.start()
     # Once its own shutdown finishes, uvicorn restores whichever SIGTERM handler

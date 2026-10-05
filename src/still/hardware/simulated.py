@@ -15,7 +15,11 @@ from __future__ import annotations
 import random
 from typing import Optional
 
+from ..conversions import SensorError
 from .base import VALVE_NAMES, HardwareInterface, Temperatures
+
+SENSOR_NAMES = ("deph_supply", "deph_return", "cond_supply", "cond_return")
+FAULT_KINDS = ("open", "shorted", "nan")
 
 
 class SimulatedHW(HardwareInterface):
@@ -43,6 +47,27 @@ class SimulatedHW(HardwareInterface):
         self._bath_f = ambient_f
         self._deph_return_f = ambient_f
         self._cond_return_f = ambient_f
+        self._fault: Optional[tuple] = None  # (sensor, kind) while a fault is injected
+
+    def set_fault(self, sensor: str, kind: str) -> None:
+        """Pretend a thermistor has failed, until clear_fault().
+
+        "open" and "shorted" raise SensorError from read_temperatures(), as
+        WidgetlordsHW's check_counts() does for the whole read. "nan" returns
+        NaN for that one sensor instead.
+        """
+        if sensor not in SENSOR_NAMES:
+            raise ValueError(f"unknown sensor {sensor!r}")
+        if kind not in FAULT_KINDS:
+            raise ValueError(f"unknown fault kind {kind!r}")
+        self._fault = (sensor, kind)
+
+    def clear_fault(self) -> None:
+        self._fault = None
+
+    @property
+    def fault(self) -> Optional[tuple]:
+        return self._fault
 
     @staticmethod
     def _target_f(valve_percent: float) -> float:
@@ -65,12 +90,20 @@ class SimulatedHW(HardwareInterface):
         def noise() -> float:
             return self._rng.uniform(-self._noise_f, self._noise_f)
 
-        return Temperatures(
-            deph_supply=self._bath_f + noise(),
-            deph_return=self._deph_return_f + noise(),
-            cond_supply=self._bath_f + noise(),
-            cond_return=self._cond_return_f + noise(),
-        )
+        readings = {
+            "deph_supply": self._bath_f + noise(),
+            "deph_return": self._deph_return_f + noise(),
+            "cond_supply": self._bath_f + noise(),
+            "cond_return": self._cond_return_f + noise(),
+        }
+        fault = self._fault
+        if fault is not None:
+            sensor, kind = fault
+            if kind == "nan":
+                readings[sensor] = float("nan")
+            else:
+                raise SensorError(f"{sensor} raw reading is out of range ({kind} sensor, injected)")
+        return Temperatures(**readings)
 
     def write_valve(self, name: str, percent: float) -> None:
         if name not in VALVE_NAMES:
