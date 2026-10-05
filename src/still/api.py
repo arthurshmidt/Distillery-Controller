@@ -29,6 +29,7 @@ from . import __version__
 from .controller import Controller, ControllerState, Mode
 from .config import AppConfig
 from .hardware.base import VALVE_NAMES
+from .hardware.simulated import FAULT_KINDS, SENSOR_NAMES, SimulatedHW
 from .runner import ControlLoop
 from .store import HistoryPoint
 
@@ -216,6 +217,11 @@ def history_model(p: HistoryPoint) -> HistoryPointModel:
     return HistoryPointModel(timestamp=p.timestamp, state=state_model(p.state))
 
 
+class SimFaultModel(BaseModel):
+    sensor: Optional[str] = Field(None, description=f"one of {', '.join(SENSOR_NAMES)}; null when no fault")
+    kind: Optional[str] = Field(None, description=f"one of {', '.join(FAULT_KINDS)}; null when no fault")
+
+
 # -- app ----------------------------------------------------------------------
 
 
@@ -224,8 +230,13 @@ def create_app(
     loop: ControlLoop,
     config: AppConfig,
     token: str,
+    simulator: Optional[SimulatedHW] = None,
 ) -> FastAPI:
-    """Build the API. Starting and stopping `loop` is the caller's job."""
+    """Build the API. Starting and stopping `loop` is the caller's job.
+
+    Pass `simulator` (only when running on SimulatedHW) to add the /api/sim/fault
+    routes for injecting a sensor fault. They don't exist otherwise.
+    """
 
     def check_token(request: Request, token_q: Optional[str] = Query(None, alias="token")) -> None:
         header = request.headers.get("authorization", "")
@@ -411,6 +422,30 @@ def create_app(
     def put_supply_pid(body: PidRequest) -> StateModel:
         controller.set_supply_pid_gains(body.p, body.i, body.d)
         return state_model(controller.state())
+
+    if simulator is not None:
+
+        def fault_model() -> SimFaultModel:
+            fault = simulator.fault
+            return SimFaultModel(sensor=fault[0], kind=fault[1]) if fault else SimFaultModel()
+
+        @api.get("/sim/fault", response_model=SimFaultModel, tags=["simulator"])
+        def get_sim_fault() -> SimFaultModel:
+            return fault_model()
+
+        @api.put("/sim/fault", response_model=SimFaultModel, tags=["simulator"])
+        def put_sim_fault(body: SimFaultModel) -> SimFaultModel:
+            """Pretend a thermistor has failed (simulator only)."""
+            try:
+                simulator.set_fault(body.sensor or "", body.kind or "")
+            except ValueError as exc:
+                raise HTTPException(422, str(exc))
+            return fault_model()
+
+        @api.delete("/sim/fault", response_model=SimFaultModel, tags=["simulator"])
+        def delete_sim_fault() -> SimFaultModel:
+            simulator.clear_fault()
+            return fault_model()
 
     app.include_router(api)
     # The web GUI. Unauthenticated so the login screen can load; only /api is protected.
