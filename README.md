@@ -117,6 +117,7 @@ All `/api` routes require the token as `Authorization: Bearer <token>`. The SSE 
 | `PUT /api/profiles/{name}/setpoint` | `{"setpoint_f": ...}` saves a profile's setpoint, active or not (404 for an unknown profile) |
 | `DELETE /api/profiles/{name}/overrides` | forget the profile's saved setpoint, gains and limits (back to `still.yaml`); applies now if it is active |
 | `DELETE /api/supply/overrides` | the same for the supply loop |
+| `GET` / `PUT` / `DELETE /api/sim/fault` | simulator only (`--simulate`; 404 otherwise, and not in `docs/openapi.json`). `PUT {"sensor": "deph_supply" \| "deph_return" \| "cond_supply" \| "cond_return", "kind": "open" \| "shorted" \| "nan"}` pretends that thermistor has failed (open/shorted raise `SensorError` like the real boards; nan returns NaN for that sensor); `DELETE` clears it |
 
 ## Tests
 

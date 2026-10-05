@@ -294,3 +294,43 @@ def test_info(env):
     assert body["thermistor"]["beta"] == 3380
     assert body["channels"]["ao"] == {"dephlegmator": 0, "condenser": 1, "supply": 2}
     assert client.get("/api/info").status_code == 401
+
+
+@pytest.fixture
+def sim_env():
+    config = load_config(CONFIG_PATH)
+    hw = SimulatedHW(seed=1)
+    controller = Controller(hw, config)
+    loop = ControlLoop(controller, interval_s=0.01)
+    client = TestClient(create_app(controller, loop, config, TOKEN, simulator=hw))
+    return client, controller
+
+
+def test_sim_fault_routes_absent_without_simulator(env):
+    client, _, _ = env
+    assert client.get("/api/sim/fault", headers=AUTH).status_code == 404
+
+
+def test_sim_fault_trips_failsafe_and_clears(sim_env):
+    client, controller = sim_env
+    controller.tick()
+    assert client.get("/api/sim/fault", headers=AUTH).json() == {"sensor": None, "kind": None}
+
+    r = client.put("/api/sim/fault", json={"sensor": "deph_return", "kind": "open"}, headers=AUTH)
+    assert r.status_code == 200
+    assert r.json() == {"sensor": "deph_return", "kind": "open"}
+    controller.tick()
+    state = client.get("/api/state", headers=AUTH).json()
+    assert state["fault"] is not None
+    assert state["valves_pct"]["dephlegmator"] == 100
+
+    assert client.delete("/api/sim/fault", headers=AUTH).json() == {"sensor": None, "kind": None}
+    controller.tick()
+    assert client.get("/api/state", headers=AUTH).json()["fault"] is None
+
+
+def test_sim_fault_rejects_bad_input_and_needs_token(sim_env):
+    client, _ = sim_env
+    assert client.put("/api/sim/fault", json={"sensor": "x", "kind": "open"}, headers=AUTH).status_code == 422
+    assert client.put("/api/sim/fault", json={"sensor": "deph_return"}, headers=AUTH).status_code == 422
+    assert client.put("/api/sim/fault", json={"sensor": "deph_return", "kind": "open"}).status_code == 401
